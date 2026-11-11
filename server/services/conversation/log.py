@@ -6,7 +6,7 @@ from html import escape, unescape
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Protocol, Tuple
 
-from ...config import get_settings
+from ...config import get_data_dir, get_settings
 from ...logging_config import logger
 from ...models import ChatMessage
 from ...utils.timezones import now_in_user_timezone
@@ -16,7 +16,7 @@ if TYPE_CHECKING:  # pragma: no cover - used for type checkers only
     from .summarization import WorkingMemoryLog
 
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DATA_DIR = get_data_dir()
 _CONVERSATION_LOG_PATH = _DATA_DIR / "conversation" / "poke_conversation.log"
 
 

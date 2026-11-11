@@ -33,6 +33,12 @@ DEFAULT_APP_VERSION = "0.3.0"
 DEFAULT_MODEL = os.getenv("OPENPOKE_MODEL", "anthropic/claude-haiku-5.5")
 
 
+def get_data_dir() -> Path:
+    """Directory for everything the server stores on disk."""
+    override = os.getenv("OPENPOKE_DATA_DIR")
+    return Path(override) if override else Path(__file__).resolve().parent / "data"
+
+
 def _env_int(name: str, fallback: int) -> int:
     try:
         return int(os.getenv(name, str(fallback)))
