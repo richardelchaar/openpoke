@@ -117,7 +117,7 @@ def grade(trace: dict, case: dict, world: dict) -> dict:
     row = {
         "case_id": case["id"], "category": case["category"], "group": case["group"], "risk": case["risk"],
         "expected": case["expected"]["outcome"], "version": trace["version"], "size": trace["size"],
-        "repeat": trace["repeat"], "answer_kind": trace.get("answer_kind"),
+        "repeat": trace["repeat"], "answer_kind": trace.get("answer_kind"), "heavy": bool(trace.get("heavy")),
     }
     if not trace["turns"]:
         row.update({"right": False, "error": "failed", "asked": False, "crash": trace.get("crash")})
@@ -166,6 +166,9 @@ def rate(rows: Iterable[dict], key=lambda r: r["right"]) -> Optional[float]:
 
 def summarize(rows: List[dict]) -> Dict[str, dict]:
     """Per roster size: overall and per group, each error type, questions, cost."""
+    # With ten more people sharing the first name, "no, the other Gustavo" no longer points
+    # at one person, so a correction has no single right answer under heavy use.
+    rows = [r for r in rows if not (r.get("heavy") and r["category"] == "correction")]
     everything = [r for r in rows if not r.get("answer_kind")]
     first = [r for r in everything if r["category"] not in DESIGN_CHOICE]
     design = [r for r in everything if r["category"] in DESIGN_CHOICE]
