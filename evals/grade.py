@@ -106,9 +106,14 @@ def grade_turn(expected: dict, turn: dict, case: dict, world: dict) -> dict:
 
     result = {"right": error is None, "error": error, "asked": asked}
     if error == "missed_ask":
-        # How it guessed: everything it could have meant, one of them, or something else.
+        # How it guessed: every agent it could have meant, one of them, or something else.
+        # Where only one option has an agent (the other is a contact), going to that agent
+        # is "one_option": it is a pick, not a message to everyone.
         options = {o for o in expected["options_must_include"] if o in works}
-        result["guess"] = "all_options" if got == options else "one_option" if got and got <= options else "other"
+        if got and got == options and len(options) > 1:
+            result["guess"] = "all_options"
+        else:
+            result["guess"] = "one_option" if got and got <= options else "other"
     return result
 
 
@@ -194,6 +199,11 @@ def summarize(rows: List[dict]) -> Dict[str, dict]:
             "asked_when_not_needed": rate(should_not, lambda r: r["asked"]),
             "right_after_answer": rate(answered, lambda r: r["after"]["right"]),
             "wrong_person": rate(at, lambda r: r["error"] == "wrong_person"),
+            "wrong_person_after_answer": sum(1 for r in answered if r["after"]["error"] == "wrong_person"),
+            "answered": len(answered),
+            "guesses": dict(Counter(r.get("guess") for r in at if r["error"] == "missed_ask")),
+            "right_without_contacts": rate([r for r in at if r["category"] != "agent_or_contact"]),
+            "seconds_per_case": sum(r["seconds"] for r in at) / len(at),
             "design_choice": {c: {"n": len(rs), "separate_agent": rate(rs),
                                   "reused_existing": rate(rs, lambda r: r["error"] == "wrong_reuse")}
                               for c in sorted(DESIGN_CHOICE)

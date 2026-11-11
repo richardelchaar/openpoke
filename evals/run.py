@@ -1,7 +1,8 @@
 """Runs one version over a set of cases at one or more roster sizes.
 
-    python -m evals.run --world dev --version v0 --sizes 25,200,800 --repeats 3
-    python -m evals.run --world dev --version v0 --sizes 10,20,40 --sample 60 --tag sweep
+    python -m evals.run --world dev --version v0 --sizes 20,160,640 --repeats 3
+    python -m evals.run --world dev --version v2 --sizes 160 --heavy --tag heavy
+    python -m evals.run --world dev --set stress --version v2 --sizes 160 --tag stress
 
 Each case runs in its own process (see run_case.py). Where a case expected a question and
 got one, the scripted answers are sent as a second turn. Results go to evals/results/ as one

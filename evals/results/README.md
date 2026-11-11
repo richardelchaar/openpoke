@@ -1,7 +1,12 @@
 # Results
 
 One file per run. The first line is the run's settings and summary; each line after is one
-case's trace and grade. `runs.csv` has one row per run and roster size.
+case's trace and grade.
+
+- `runs.csv` has one row per run and roster size **as graded when the run was made**. Several
+  grading rules changed afterwards, so its figures differ from the report's.
+- `regraded.csv` has every run under the current rules. It is what the report uses, and
+  `python -m evals.report --csv` rebuilds it.
 
 The grade and summary stored in a file are as the grader stood when the run was made.
 To see a run under the current rules, re-grade it. This calls no model:

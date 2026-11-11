@@ -2,6 +2,8 @@
 
     python -m evals.report            prints the tables as Markdown
     python -m evals.report --json     prints the numbers behind them
+    python -m evals.report --categories [world]   the original against the chosen version, by category
+    python -m evals.report --csv      writes results/regraded.csv: every run under the current rules
 
 Calls no model. Every figure in the write-up comes from here.
 """
@@ -23,7 +25,19 @@ from .worlds.heavy import load_heavy
 RESULTS = Path(__file__).resolve().parent / "results"
 VERSIONS = {
     "v0": "Original", "v1": "Prompt only", "v2": "Records and lookup",
-    "v3": "Told to ask", "v4": "Code rule", "v5": "Judge",
+    "v2b": "Records and lookup, second iteration",
+    "v3": "Required to ask", "v4": "Code rule", "v5": "Second model call",
+}
+CATEGORY_NAMES = {
+    "clear_followup": "Clear follow-up", "pronoun_followup": "Pronoun follow-up", "after_gap": "Follow-up after a gap",
+    "two_works_topic_named": "Same person, two pieces of work, topic named",
+    "same_first_name_topic_settles": "Same first name, topic settles it", "different_wording": "Different wording",
+    "shared_contact": "Shared contact", "email_alert_followup": "Follow-up on an email alert", "correction": "Correction",
+    "known_first_name_new_person": "Known first name, different person", "brand_new_person": "Brand-new person",
+    "same_person_vague": "Same person, vague", "same_first_name_vague": "Same first name, nothing settles it",
+    "agent_or_contact": "A person with an agent, or a contact", "chat": "Chat", "two_tasks": "Two tasks in one message",
+    "topic_switch": "Topic switch", "inbox_scanner": "Inbox-scanner trap", "messy_text": "Messy text",
+    "after_a_question": "After a question",
 }
 
 
@@ -94,9 +108,49 @@ def markdown(world: str = "dev") -> str:
     return "\n\n".join(parts)
 
 
+def by_category(world: str, version: str = "v2") -> str:
+    """The original against one version, category by category, pooled over the three sizes."""
+    data = collect(world)
+    sizes = ["20", "160", "640"]
+    lines = [f"**By category, {world} world, pooled over 20 / 160 / 640 agents**", "",
+             f"| Category | Original | {VERSIONS[version]} | Change |", "|---|---|---|---|"]
+    rows = []
+    for key, name in CATEGORY_NAMES.items():
+        a = sum(data["v0"][s]["categories"][key] for s in sizes) / 3
+        b = sum(data[version][s]["categories"][key] for s in sizes) / 3
+        rows.append((b - a, f"| {name} | {pct(a)} | {pct(b)} | {100 * (b - a):+.0f} |"))
+    lines += [row for _, row in sorted(rows, reverse=True)]
+    for label, v in (("Original", "v0"), (VERSIONS[version], version)):
+        without = " / ".join(pct(data[v][s]["right_without_contacts"]) for s in sizes)
+        lines.append(f"\n{label}, right outcome without the contact category: {without}")
+    return "\n".join(lines)
+
+
+def regraded_csv(path: Path) -> None:
+    """One row per version, world and roster, under the current grading rules."""
+    import csv
+
+    keys = ["right", "asked_when_needed", "asked_when_not_needed", "right_after_answer", "wrong_person",
+            "tokens_per_case", "cost_per_case", "seconds_per_case"]
+    with path.open("w", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["world", "version", "roster", "cases"] + keys + ["duplicates", "wrong_person_after_answer", "answered"])
+        for world in ("dev", "heldout"):
+            for version, columns in collect(world).items():
+                for roster, s in columns.items():
+                    writer.writerow([world, version, roster, s["n"]]
+                                    + ["" if s[k] is None else round(s[k], 4) for k in keys]
+                                    + [s["errors"].get("duplicate", 0), s["wrong_person_after_answer"], s["answered"]])
+
+
 if __name__ == "__main__":
     world = next((a for a in sys.argv[1:] if not a.startswith("--")), "dev")
-    if "--json" in sys.argv:
+    if "--csv" in sys.argv:
+        regraded_csv(RESULTS / "regraded.csv")
+        print(f"wrote {RESULTS / 'regraded.csv'}")
+    elif "--categories" in sys.argv:
+        print(by_category(world))
+    elif "--json" in sys.argv:
         print(json.dumps(collect(world), indent=1))
     else:
         print(markdown(world))
