@@ -30,6 +30,7 @@ _load_env_file()
 
 DEFAULT_APP_NAME = "OpenPoke Server"
 DEFAULT_APP_VERSION = "0.3.0"
+DEFAULT_MODEL = os.getenv("OPENPOKE_MODEL", "anthropic/claude-haiku-5.5")
 
 
 def _env_int(name: str, fallback: int) -> int:
@@ -50,12 +51,12 @@ class Settings(BaseModel):
     server_host: str = Field(default=os.getenv("OPENPOKE_HOST", "0.0.0.0"))
     server_port: int = Field(default=_env_int("OPENPOKE_PORT", 8001))
 
-    # LLM model selection
-    interaction_agent_model: str = Field(default="anthropic/claude-sonnet-4")
-    execution_agent_model: str = Field(default="anthropic/claude-sonnet-4")
-    execution_agent_search_model: str = Field(default="anthropic/claude-sonnet-4")
-    summarizer_model: str = Field(default="anthropic/claude-sonnet-4")
-    email_classifier_model: str = Field(default="anthropic/claude-sonnet-4")
+    # LLM model selection: OPENPOKE_MODEL sets every role, the per-role vars override it
+    interaction_agent_model: str = Field(default=os.getenv("OPENPOKE_INTERACTION_MODEL", DEFAULT_MODEL))
+    execution_agent_model: str = Field(default=os.getenv("OPENPOKE_EXECUTION_MODEL", DEFAULT_MODEL))
+    execution_agent_search_model: str = Field(default=os.getenv("OPENPOKE_SEARCH_MODEL", DEFAULT_MODEL))
+    summarizer_model: str = Field(default=os.getenv("OPENPOKE_SUMMARIZER_MODEL", DEFAULT_MODEL))
+    email_classifier_model: str = Field(default=os.getenv("OPENPOKE_CLASSIFIER_MODEL", DEFAULT_MODEL))
 
     # Credentials / integrations
     openrouter_api_key: Optional[str] = Field(default=os.getenv("OPENROUTER_API_KEY"))
