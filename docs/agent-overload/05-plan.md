@@ -12,7 +12,7 @@ All versions live in the same code behind config switches, and all run on the sa
 |---|---|---|---|
 | **V0** Original | None: every name in the prompt | Orchestrator | Original |
 | **V1** Prompt only | None | Orchestrator | Rewritten |
-| **V2** Shortlist | Work records | Orchestrator picks from the candidates | Rewritten |
+| **V2** Records and lookup | Work records | Orchestrator picks from the candidates | Rewritten |
 | **V3** Told to ask | Work records | Orchestrator, with a rule to ask when unsure | Rewritten |
 | **V4** Code rule | Work records | Code asks when candidates for the same person are too close to call | Rewritten |
 | **V5** Judge + code | Work records | A small model labels each candidate; code counts | Rewritten |
@@ -66,7 +66,8 @@ E1 to E4 and E7 call the model. E5 and E6 are code over saved results, so they c
 | A final dev run of the winner before E7 | Not needed: the winner's settings were never changed after its dev run. |
 | An agent-memory check on about 20 agents | Not built. Agent memory is listed as a gap in the report. |
 | | Added: a crowded test (ten namesakes), a stress set of 40 messier messages, and a comparison of plain keyword search with the full lookup. |
-| | Three grading rules were corrected after reading failures, for every version. Each is in the journal. |
+| | Five grading rules were changed after reading failures, for every version. Each is in the journal, and the report lists them with their effect. |
+| | A second iteration of V2 (each candidate says how it was found), run on the dev world. A tie. |
 
 ---
 
@@ -74,7 +75,7 @@ E1 to E4 and E7 call the model. E5 and E6 are code over saved results, so they c
 
 I write the bars into this file **after E2 and before any fixed version is run**, because sensible targets depend on the baseline. Each bar is a number for one rate at one roster size. A missed bar is reported as missed.
 
-Written on Nov 10 after the baseline (run `20261110-202454-dev-v0-baseline`), before any fixed version was run. The original's figures are for 20 / 160 / 640 agents. A bar has to hold at every size.
+Written on Nov 10 after the baseline (run `20261110-202454-dev-v0-baseline`), before any fixed version was run. The original's figures are for 20 / 160 / 640 agents, as graded on that day; two later grading changes moved them slightly (the report has the current figures). A bar has to hold at every size.
 
 | Rate | The original | Bar for the fix |
 |---|---|---|
@@ -106,20 +107,17 @@ Settings are locked before E7. Nothing changes after the held-out run.
 
 ---
 
-## 5. Changes to the code
-
-The choices behind these changes are in [03-technical-design.md](03-technical-design.md).
+## 5. Where the changes are
 
 | Area | Files |
 |---|---|
-| Config: models and switches | `server/config.py` |
-| Work records and contacts | `server/services/agents/` (new); replaces `services/execution/roster.py` |
-| Lookup, judge, decision | `server/routing/` (new) |
-| Orchestrator: prompt, tools, running the pipeline | `server/agents/interaction_agent/{agent,tools,runtime}.py`, `system_prompt.md` |
-| Execution agents: record updates, memory, lock | `server/agents/execution_agent/{agent,runtime,batch_manager}.py`, `system_prompt.md` |
-| Send approval and recipient check | `server/agents/execution_agent/tools/gmail.py`, `server/services/approvals.py` (new) |
-| Model client: retries, temperature, forced tool call | `server/openrouter_client/client.py` |
+| Config: models, data directory, routing switches | `server/config.py` |
+| Work records and contacts | `server/services/agents/` (new) |
+| Lookup, the pipeline, the two deciders | `server/routing/` (new) |
+| Orchestrator: prompt, tools, running the lookup | `server/agents/interaction_agent/` (`agent.py`, `tools.py`, `runtime.py`, `system_prompt_v2.md` and the `agent_tools_*.md` sections) |
+| Execution agents: record updates, the record in the prompt | `server/agents/execution_agent/` (`runtime.py`, `agent.py`, `system_prompt.md`) |
+| Model client: output cap, caching, retries, forced tool call | `server/openrouter_client/client.py` |
 | Hand-off entries in the conversation log | `server/services/conversation/log.py` |
-| Traces | `server/services/trace.py` (new) |
 | Eval | `evals/` (new) |
 | Tests | `tests/` (new) |
+| Checks on every push | `.github/workflows/checks.yml` (new) |

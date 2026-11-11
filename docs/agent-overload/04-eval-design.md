@@ -198,18 +198,18 @@ Two categories reflect a design choice of mine, not a mistake by any reasonable 
 
 Both run for every version and are reported as how often each version reuses an existing agent. Neither counts toward any rate.
 
-Two further rules follow from the same reasoning, and were added after reading failures:
+Two further rules follow from the same reasoning, and were added after reading failures. All five grading changes made after results are listed with their effect in the report, section 7.
 
 - **A correction may also contact the agent that was wrongly used,** to tell it to stop.
 - **After a question about which person was meant,** a new agent for the chosen person counts as well as their existing one.
 
-Three categories involve some judgment and are scored. Results are shown with and without them: same person vague, a person with an agent or a contact, and correction.
+Three categories involve some judgment and are scored: same person vague, a person with an agent or a contact, and correction. `python -m evals.report --categories` prints every category for the original and the chosen version, and the overall rate without the contact category.
 
 ### When it asks
 
 | Tracked | Meaning |
 |---|---|
-| Asked when it should | It asked on a case where asking is right |
+| Asked when it should | It asked on a case where asking is right. "Asked" means the reply contains a question mark and nothing was handed off. |
 | Asked when it shouldn't | It asked when the answer was clear. This counts as an error. |
 | Right after the answer | The turn after the scripted answer did the right thing |
 
@@ -257,7 +257,7 @@ Per version, per roster size, per category.
 
 - **Outcome:** right; each error type; asked when it should; asked when it shouldn't; right after the answer.
 - **Lookup:** whether every agent the case needs was among the candidates. This separates "the lookup missed it" from "it was there and the choice was wrong".
-- **Cost:** model calls, tokens, dollars and seconds per message.
+- **Cost:** model calls, tokens and dollars per message. Seconds are recorded but not reported: replayed responses make them meaningless.
 - **Variation:** the original was run three times. Its overall rate moved 1.2 points between repeats, so later versions are run once per size and a gap under 2 points is a tie. Small categories (12 to 16 cases) move much more than that and are read with care.
 
 ---
@@ -284,10 +284,12 @@ One record per case, saved as a line in the run's results file.
 | **Crowded test** | 160 agents, with 10 extra people sharing each first name in the case. The extras are filtered so none has the same kind of work or a telling word in common with the message. | Whether more people with the same name make things worse |
 | **Lookup quality** | Runs the app's lookup over every case with no model | Whether the right agent is among the candidates |
 | **Ask settings** | Recomputes the decision at each setting from the lookup's scores and the judge's saved labels, with no model | What asking more readily costs in needless questions |
+| **Heavy use** | 160 agents, with six more pieces of work for each person in a case and ten namesakes. All six versions, all cases. A question need not list every option there, and corrections are left out. | What happens when the roster is crowded around one person |
+| **Stress set** | 40 messier messages written after the main results: short and misspelt names, a surname alone, no name | Where the lookup's name matching breaks |
 
 ---
 
-## 8. Rules that keep it honest
+## 8. Rules I held to
 
 1. The cases were committed and tagged before any changed version was run.
 2. The held-out world is run once, at the end, with the settings locked.

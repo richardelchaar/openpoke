@@ -2,7 +2,7 @@
 
 One entry per experiment, in the order they were run. The experiments are listed in [05-plan.md](05-plan.md). Every number comes from a file in `evals/results/`; to see a run under the current grading rules, use `python -m evals.rescore <file>`.
 
-All runs use `anthropic/claude-haiku-5.5` for every role, on the dev world.
+All runs use `anthropic/claude-haiku-5.5` for every role. All are on the dev world except E7.
 
 ---
 
@@ -49,7 +49,7 @@ All runs use `anthropic/claude-haiku-5.5` for every role, on the dev world.
 |---|---|---|
 | Right | 95% | 93% |
 | Route | 95% | 92% |
-| Needless questions (of 414 runs) | 3 | 13 |
+| Needless questions (of 414 runs each) | 3 | 13 |
 
 **Result.** A small effect: about 3 points on routing, and more needless questions.
 
@@ -77,10 +77,10 @@ All runs use `anthropic/claude-haiku-5.5` for every role, on the dev world.
 
 What else the run showed:
 
-- **When it should ask and doesn't, it usually acts on every option.** At 20 agents, 119 of 176 missed questions sent the work to both agents or both people.
+- **When it should ask and doesn't, it usually picks one option.** At 20 agents, of 176 missed questions, 131 went to one of the options and 40 to every option. (An earlier version of this entry had those the wrong way round: the grader was counting a hand-off to the only agent, where the other option was a contact, as "every option".)
 - **Size changes which mistake it makes.** With few agents it reuses too readily; with many it creates too readily. Duplicates rise from 1.5% to 3.9%.
 - **One category does break with size.** "Ask the adjuster where Anton's claim stands" reaches the client's agent 92% of the time at 20 agents and 39% at 640.
-- **A contact with no agent is invisible to it:** 0 of 270. It only sees agent names.
+- **A contact with no agent is invisible to it:** right in 0 of 270. It only sees agent names. In 196 it used the agent of the person who has one, in 47 it made a new agent, and in 27 it asked without mentioning the contact.
 - **Run-to-run variation is small.** The overall rate moved 1.2 points across the three repeats, and 90% of cases gave the same result all three times.
 
 **A mistake of mine, corrected.** I had scored "new work for a person who already has an agent" as an error when the original reuses that person's agent. The original's prompt asks for exactly that, so I was scoring my own design preference. That category and one-off lookups are now reported as behaviour and left out of the rates. The original reuses in 54% / 38% / 26% of those cases.
@@ -191,12 +191,12 @@ What V5 does better is the turn after the answer.
 
 ## Crowded test for every version
 
-160 agents, 10 extra people per first name, 138 scored cases, one run.
+160 agents, 10 extra people per first name, 138 scored cases. One run each, except the original, which has three.
 
 | | V0 | V1 | V2 | V3 | V4 | V5 |
 |---|---|---|---|---|---|---|
 | Right | 93% | 91% | 92% | 91% | 91% | 89% |
-| Needless questions | 13 of 414 | 7 | 9 | 12 | 10 | 14 |
+| Needless questions | 13 of 414 (3%) | 7 of 138 (5%) | 9 (7%) | 12 (9%) | 10 (7%) | 14 (10%) |
 
 **Result.** No version does better than the original here. With eleven people called Felix, every version sometimes asks "which Felix?" even when the topic settles it.
 
@@ -226,7 +226,7 @@ What V5 does better is the turn after the answer.
 | Two people named, one is the recipient | 5/6 | 4/6 | 2/6 | 0/6 | 4/6 | 4/6 |
 | **All 40** | **25** | **22** | **28** | **27** | **32** | **30** |
 
-**Result.** As expected, every version is well below its main-set score: 63% for the original and 68 to 80% for the others. With 40 cases, the gaps between the changed versions are within noise.
+**Result.** As expected, every version is well below its main-set score: 62% for the original, 55% for the prompt alone, and 68 to 80% for the four with a lookup. With 40 cases, the gaps between the changed versions are within noise.
 
 - **The lookup wins where there is no name to match:** a surname alone and no name at all, 16 of 16 against the original's 5 of 16. The original mostly creates a duplicate there.
 - **The lookup loses on a short form of a first name:** "Wes" is not "Wesley", names are matched as whole words, so the right agent is never a candidate. The original reads the whole list and can make the leap.
@@ -264,7 +264,7 @@ What V5 does better is the turn after the answer.
 
 **Two grading notes, for every version.** Under heavy use a question counts if it is asked and nothing is sent, because a good question about eight pieces of work may not list them all. And corrections are left out: with ten more people sharing the name, "no, the other Gustavo" has no single right answer. I found that by reading seven "failures" in which V2 had cancelled the wrong draft and asked which Gustavo.
 
-**Decision D7 closed: V2 is the default.** Best or tied for best in every column, and the simplest.
+**Decision D7 closed: V2 is the default.** Best or tied on the overall rate in every column, and the simplest. The judge is better on the turn after the user answers at the normal roster sizes.
 
 ---
 
@@ -309,3 +309,25 @@ Five met, three missed. The misses are needless questions, the turn after an ans
 **Not run.** The original under heavy use on this world: the credit ran out.
 
 **What this run cannot show.** The held-out world is built by the same generator as the dev world, from the same kinds of work and the same phrasings. It shows the result isn't tied to particular names or to a client-heavy inbox. It does not show how the system handles a different style of message; the stress set is the only look at that.
+
+---
+
+## Second iteration of V2 · after the held-out run
+
+| | |
+|---|---|
+| Question | V2 asks needlessly on 3 to 4% of clear messages on dev and 7% on held-out. Can that be cut? |
+| Expected | Yes. Reading the needless questions suggested a cause: the lookup also returns agents that only share a topic with the message, and the orchestrator treats them as alternatives ("did you mean Kendrick or Amara?"). |
+| Setup | V2 with one change: each candidate says how it was found, and the prompt says a topic-only match belongs to someone the message didn't name. All 448 dev cases, three sizes and heavy use, one run. `…-dev-v2b-main`, `…-dev-v2b-heavy`. The held-out world was not re-run. |
+
+| 20 / 160 / 640 / heavy use | V2 | With the change |
+|---|---|---|
+| Right | 96 / 97 / 95 / 95% | 96 / 97 / 97 / 96% |
+| Asks when it shouldn't | 3.3 / 3.0 / 4.3 / 5.6% | 4.3 / 3.3 / 3.0 / 4.5% |
+| Asks when it should | 100 / 100 / 100 / 100% | 99 / 99 / 97 / 100% |
+| Right after the answer | 87 / 85 / 82 / 73% | 89 / 88 / 84 / 72% |
+| Duplicates, of 406 runs (434 under heavy use) | 5 / 3 / 5 / 2 | 2 / 1 / 3 / 3 |
+
+**Result.** Wrong again. The needless questions did not move. The change is a tie overall, slightly better on the turn after an answer, and it missed a few questions it should have asked, which V2 never did.
+
+**Decision.** Off by default (`OPENPOKE_EXPLAIN_CANDIDATES`). V2 as measured on the held-out world stays the default. The cause of the needless questions is still open.

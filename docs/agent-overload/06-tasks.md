@@ -61,13 +61,15 @@ In the order the work was done. Items that were planned and dropped are marked, 
 ## 7. Final
 - [x] The winner set as the default
 - [x] E7 held-out run
+- [x] A second iteration of the chosen version, on the dev world
 - [x] Results tables built from the saved runs (`python -m evals.report`)
 - [x] Checks on every push
-- [ ] Report (`08`)
+- [x] Report (`08`)
 - [ ] Pull request
 
 ## Planned and not done
-- Agent memory from the work record, and its check
+- Replaying only an agent's last few turns (it is now given the facts on its record; its log is still replayed whole)
+- Importing the user's contacts; keeping an agent's summary current
 - Send approval for reply and forward; recipient check
 - One run per agent at a time
 - End-to-end stories against a fake mailbox

@@ -63,8 +63,8 @@ Causes 1 to 6 are about too many agents and how one gets picked. Cause 7 turns a
 **What measuring showed.** The ranking above was partly wrong ([07-journal.md](07-journal.md), E1 and E2):
 
 - Cause 1 costs money more than accuracy. On the model I used, the original finds a named person as well in 1,280 names as in 10. What grows is the prompt: 11,700 tokens a message at 20 agents and 40,100 at 640.
-- Cause 4 is the one that does the damage. The largest error at every size is acting when it should ask, and it usually acts on every option at once.
-- Cause 1 has a second half I had not listed: with only names to look at, the orchestrator cannot see a person the user knows who has no agent yet. It never once asked about one.
+- Cause 4 is the one that does the damage. The largest error at every size is acting when it should ask. It usually picks one of the options, and about a quarter of the time sends the work to all of them.
+- Cause 1 has a second half I had not listed: with only names to look at, the orchestrator cannot see a person the user knows who has no agent yet. It handled that case correctly in 0 of 270 runs.
 
 ---
 
@@ -95,5 +95,5 @@ Each of these is separate from overload. "Fixed" means fixed on this branch. The
 | 11 | **Reply and forward send immediately.** They call Gmail directly with no draft step. Only a line in the prompt asks for confirmation. | `agents/execution_agent/tools/gmail.py:387-428` | see the report |
 | 12 | **Each agent's history grows without limit, and is cut short as it's written.** The whole log is replayed in the system prompt on every call; a cap exists in the code and is never set. Tool arguments are stored to 200 characters and results to 500, so a thread id the agent needs later can be missing. | `agents/execution_agent/agent.py:39,73-94,121-123`; `runtime.py:33` | partly: the agent is now given the people and thread ids from its work record; the log itself is unchanged. See the report. |
 | 13 | **The same agent can run twice at once.** A reminder and a user request can both start it, on one log. | `agents/interaction_agent/tools.py`; `trigger_scheduler.py:93` | see the report |
-| 14 | **No tests.** | | 36 unit tests and the eval added |
+| 14 | **No tests.** | | 39 unit tests and the eval added |
 | 15 | **No login on the API.** Anyone who can reach the server can read the history or delete everything. | `routes/chat.py:18-45` | see the report |

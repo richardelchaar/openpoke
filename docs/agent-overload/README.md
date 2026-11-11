@@ -20,7 +20,7 @@ I also built two ways of forcing the decision to ask, in code and with a second 
 
 ## Results
 
-One model for everything (`anthropic/claude-haiku-5.5`). 448 test cases on the dev world, 158 on a held-out world run once at the end.
+One model for everything (`anthropic/claude-haiku-5.5`). 448 test cases on the dev world and 158 on a held-out world run once at the end; 406 and 143 of them are scored.
 
 **Right outcome, held-out world**
 
@@ -40,7 +40,7 @@ One model for everything (`anthropic/claude-haiku-5.5`). 448 test cases on the d
 | …and code decides when to ask | 91% | 90% | 91% | 85% |
 | …and a second model call decides | 94% | 93% | 93% | 94% |
 
-"Heavy use" keeps the roster at 160 agents and gives each person in a case six more pieces of work and ten namesakes.
+"Heavy use" keeps the roster at 160 agents and gives each person in a case six more pieces of work and ten namesakes. That column is graded with two allowances described in the report; under the normal rules the original scores 68% there and records and lookup 85%.
 
 **What stands out**
 
@@ -48,11 +48,13 @@ One model for everything (`anthropic/claude-haiku-5.5`). 448 test cases on the d
 - **A longer list does not make the original less accurate** on this model. It makes it cost more: 40,100 tokens a message at 640 agents, against 11,100 with the lookup.
 - **A rewritten prompt alone does nothing overall.** It asks more and creates far more duplicates.
 - **Forcing the question adds needless questions and no correct ones.**
-- **With the lookup, no run reached the wrong person.**
+- **On the first turn, no run with the lookup handed work to an agent belonging to someone else.** On the turn after the user answers a question it happened once in 90 held-out runs.
+- **The gain is on unclear messages.** On clear ones the new version is slightly worse, because it sometimes asks when it didn't need to. The report has the table.
 
 **Where it falls short**
 
-- On the held-out world it asks needlessly 7% of the time, against a bar of 5% that I set beforehand. Three of eight bars were missed.
+- On the held-out world it asks needlessly on 7% of clear messages, against a bar of 5% that I set beforehand. Three of eight bars were missed. A second iteration aimed at this did not reduce it.
+- The test supplies the user's contacts and a clean summary for every agent. In the app these are thinner: a contact is learned when an agent is created for them.
 - On 40 messier messages it gets 70% right, against 62% for the original. A short form of a name ("Wes" for Wesley) finds nothing.
 - The test set is generated, and I chose its categories. The 92% is what the design does when names resolve cleanly.
 
@@ -76,7 +78,7 @@ If you have five minutes, read this page and the report.
 ## Running it
 
 ```
-python -m pytest tests -q                 # 38 tests, no model calls
+python -m pytest tests -q                 # 39 tests, no model calls
 python -m evals.cases.validate            # every case against its world
 python -m evals.report                    # the results tables, from the saved runs
 python -m evals.run --world dev --version v2 --sizes 20,160,640     # needs OPENROUTER_API_KEY

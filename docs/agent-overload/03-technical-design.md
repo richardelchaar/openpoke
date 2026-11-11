@@ -50,7 +50,14 @@ Setting the first two to `none` and `v1` gives the original behaviour, which is 
 | **Only what the agent acted on:** drafts, replies, forwards, reminders | An agent that scanned the whole inbox must not end up matching every name. A search records the query and nothing from its results. |
 | **The person named when the agent is created is added too** | So an agent is linked to its person before it does anything. |
 
-The execution agent calls this after each successful tool call. The eval builds its worlds through the same function, so the rule above is what gets tested.
+The execution agent calls this after each successful tool call. The eval builds each agent's people, threads and searches through the same function, so the rule above is what gets tested.
+
+**Two things the eval supplies that the app only partly does.**
+
+| | In the eval | In the app |
+|---|---|---|
+| Contacts | The user's whole address book: everyone in the test world's core | A person becomes a contact when an agent is created for them. Importing the address book is not built. |
+| The one-line summary | Written by the world generator for every agent | The first sentence of the agent's first instructions, set when it is created. It is not updated as the work moves on. |
 
 ---
 

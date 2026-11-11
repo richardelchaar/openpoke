@@ -70,14 +70,14 @@ This is the part I most wanted evidence on, so each option was built as a versio
 | Code asks when the candidates' keyword scores don't favour one | V4 | Can't read meaning, so it asks whenever the words don't overlap. The most needless questions of all. |
 | A model call labels each candidate, and code counts the labels | V5 | Tied with V2 within one to two points, at the cost of an extra model call. Better only on the turn after the user answers. |
 
-**Decision D7:** V2. The problem was never that the model wouldn't ask. The original gave it nothing to go on: a list of names, and no sign that a second person with that name existed. Given the candidates, it asks without being forced, and forcing it only adds questions.
+**Decision D7:** V2, called "records and lookup" in the report. The problem was never that the model wouldn't ask. The original gave it nothing to go on: a list of names, and no sign that a second person with that name existed. Given the candidates, it asks without being forced, and forcing it only adds questions.
 
 ### An agent for everything (cause 6)
 
 | Option | Verdict | Why |
 |---|---|---|
 | **The prompt says chat and general questions need no agent** | **Yes** | Every version, including the original, already answers chat directly in the tests. |
-| **One-off lookups get a throwaway agent** | **Yes** | It answers and is discarded, so it never appears in a lookup. |
+| **One-off lookups get a throwaway agent** | **Yes** | It is marked as throwaway when created and left out of every later lookup. |
 | Archive agents that go idle | No | It mattered when every name was in the prompt. With the lookup, an idle agent only reaches the prompt when it matches the message. |
 
 ### No record of hand-offs (cause 5)
@@ -155,7 +155,7 @@ That is an argument, not a measurement. The eval reports how often each version 
 | D4 | Facts on the record come from tool calls | Extract them from text | Exact, and nothing to guess | Up front |
 | D5 | Lookup is code: name matching, recent hand-offs, keyword search | A model step first; embeddings | Found the needed agents in 100% of tested cases | E6 |
 | D6 | Hand off by id; create is its own tool | One tool that does both | A wrong name can no longer create an agent | Up front |
-| D7 | The orchestrator decides whether to ask, from the candidates | A prompt rule, a code rule, a judge | Best or tied for best everywhere, and the simplest | E4, heavy use |
+| D7 | The orchestrator decides whether to ask, from the candidates | A prompt rule, a code rule, a second model call | Best or tied on the overall rate at every roster size, and the simplest. The second model call is better on the turn after the user answers. | E4, heavy use |
 | D8 | Roster sizes 20, 160 and 640, plus a heavy-use roster | Fixed round numbers | Size alone was flat in a sweep to 1,280; crowding around a person is what changes behaviour | E1, heavy use |
 | D9 | Grade by rule, with no judging model | A model as grader | Routing has a right answer | Up front |
 | D10 | A second world, used once, for the final result | One world, split | Shows the result isn't tied to the names and mix it was tuned on | Up front |
