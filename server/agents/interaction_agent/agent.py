@@ -29,6 +29,8 @@ def build_system_prompt() -> str:
         return SYSTEM_PROMPT
     if settings.routing_lookup == "records":
         section = _part("agent_tools_records.md")
+        if settings.routing_explain:
+            section += "\n" + _part("agent_tools_explain.md")
         if settings.routing_decider == "told_to_ask":
             section += "\n" + _part("agent_tools_ask_rule.md")
         elif settings.routing_decider in ("code_rule", "judge"):

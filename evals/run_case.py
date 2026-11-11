@@ -33,6 +33,9 @@ VERSIONS: Dict[str, Dict[str, str]] = {
     "v0": {"OPENPOKE_LOOKUP": "none", "OPENPOKE_DECIDER": "orchestrator", "OPENPOKE_PROMPT": "v1"},
     "v1": {"OPENPOKE_LOOKUP": "none", "OPENPOKE_DECIDER": "orchestrator", "OPENPOKE_PROMPT": "v2"},
     "v2": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "orchestrator", "OPENPOKE_PROMPT": "v2"},
+    # v2 with one change from reading its failures: each candidate says how it was found.
+    "v2b": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "orchestrator", "OPENPOKE_PROMPT": "v2",
+            "OPENPOKE_EXPLAIN_CANDIDATES": "1"},
     "v3": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "told_to_ask", "OPENPOKE_PROMPT": "v2"},
     "v4": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "code_rule", "OPENPOKE_PROMPT": "v2"},
     "v5": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "judge", "OPENPOKE_PROMPT": "v2"},

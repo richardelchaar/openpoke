@@ -11,7 +11,7 @@ from typing import Dict, List
 
 # Versions that write a hand-off entry into the conversation log. In real use they would
 # have written one for each earlier hand-off, so the chat before a case includes them.
-RECORDS_HANDOFFS = {"v2", "v3", "v4", "v5"}
+RECORDS_HANDOFFS = {"v2", "v2b", "v3", "v4", "v5"}
 # Versions where each agent has a work record and the orchestrator sees candidates.
 USES_RECORDS = RECORDS_HANDOFFS
 

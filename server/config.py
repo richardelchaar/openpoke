@@ -82,6 +82,9 @@ class Settings(BaseModel):
     routing_lookup: str = Field(default=os.getenv("OPENPOKE_LOOKUP", "records"))
     routing_decider: str = Field(default=os.getenv("OPENPOKE_DECIDER", "orchestrator"))
     routing_prompt: str = Field(default=os.getenv("OPENPOKE_PROMPT", "v2"))
+    # Tell the orchestrator how each candidate was found, so it can discount one that only
+    # shares a topic with the message.
+    routing_explain: bool = Field(default=os.getenv("OPENPOKE_EXPLAIN_CANDIDATES", "0") == "1")
     routing_ask: str = Field(default=os.getenv("OPENPOKE_ASK", "balanced"))
     routing_ask_margin: float = Field(default=_env_float("OPENPOKE_ASK_MARGIN", 0.25))
     judge_model: str = Field(default=os.getenv("OPENPOKE_JUDGE_MODEL", DEFAULT_MODEL))
