@@ -33,10 +33,23 @@ def _headers(*, api_key: Optional[str] = None) -> Dict[str, str]:
     return headers
 
 
-def _build_messages(messages: List[Dict[str, str]], system: Optional[str]) -> List[Dict[str, str]]:
+def _cached(text: str) -> List[Dict[str, Any]]:
+    """Text marked as a point the provider may cache the prompt up to."""
+    return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
+
+def _build_messages(messages: List[Dict[str, Any]], system: Optional[str]) -> List[Dict[str, Any]]:
+    """Put the system prompt first and mark the two stable parts of the prompt for caching.
+
+    The system prompt is the same on every call, and the first message is the same on
+    every step of one tool loop, so later calls can read both from the cache.
+    """
+    built = [dict(message) for message in messages]
+    if built and isinstance(built[0].get("content"), str) and built[0]["content"]:
+        built[0]["content"] = _cached(built[0]["content"])
     if system:
-        return [{"role": "system", "content": system}, *messages]
-    return messages
+        return [{"role": "system", "content": _cached(system)}, *built]
+    return built
 
 
 def _handle_response_error(exc: httpx.HTTPStatusError) -> None:
@@ -59,8 +72,14 @@ async def request_chat_completion(
     tools: Optional[List[Dict[str, Any]]] = None,
     base_url: str = OpenRouterBaseURL,
     max_tokens: int = DEFAULT_MAX_TOKENS,
+    temperature: Optional[float] = None,
+    tool_choice: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Request a chat completion and return the raw JSON payload."""
+    """Request a chat completion and return the raw JSON payload.
+
+    `tool_choice` forces a call to one named tool, which is how a caller gets output in a
+    fixed shape.
+    """
 
     payload: Dict[str, object] = {
         "model": model,
@@ -70,6 +89,10 @@ async def request_chat_completion(
     }
     if tools:
         payload["tools"] = tools
+    if tool_choice:
+        payload["tool_choice"] = tool_choice
+    if temperature is not None:
+        payload["temperature"] = temperature
 
     url = f"{base_url.rstrip('/')}/chat/completions"
 
