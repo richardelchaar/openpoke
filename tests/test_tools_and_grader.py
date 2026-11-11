@@ -122,3 +122,14 @@ def test_an_execution_agent_is_told_its_title_and_what_it_has_acted_on(store, pe
     prompt = agent_module.ExecutionAgent(people["claim"]).build_system_prompt()
     assert "Leila Sorensen auto claim" in prompt
     assert "leila.sorensen@example.com" in prompt and "t_88" in prompt
+
+
+def test_a_new_agent_starts_with_a_summary_and_its_person_becomes_a_contact(store, monkeypatch):
+    use(store, monkeypatch)
+    routing = Routing(LookupResult([], []), approved=[])
+    result = in_loop(lambda: tools.create_agent(
+        routing, "Dana Lee - lease renewal", "Email Dana Lee asking for the lease renewal terms. Keep it short.",
+        person_name="Dana Lee", person_email="dana.lee@example.com"))
+    record = store.get(result.payload["agent_id"])
+    assert record["summary"] == "Email Dana Lee asking for the lease renewal terms."
+    assert store.contact_name("dana.lee@example.com") == "Dana Lee"

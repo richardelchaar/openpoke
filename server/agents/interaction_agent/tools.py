@@ -256,6 +256,14 @@ def _find_duplicate(title: str, person_email: str) -> Optional[dict]:
     return None
 
 
+def _first_sentence(text: str, limit: int = 160) -> str:
+    """The opening of the first instructions, as the one line on what the work is about."""
+    line = " ".join(text.split())
+    end = line.find(". ")
+    line = line[: end + 1] if 0 < end < limit else line
+    return line if len(line) <= limit else line[: limit - 1].rstrip() + "…"
+
+
 def create_agent(routing: Routing, title: str, instructions: str, person_name: str = "", person_email: str = "",
                  throwaway: bool = False, allow_duplicate: bool = False) -> ToolResult:
     """Create an agent for new work and hand it its first instructions."""
@@ -282,9 +290,13 @@ def create_agent(routing: Routing, title: str, instructions: str, person_name: s
                 "hint": "Hand off to it with send_message_to_agent. If this really is separate work, "
                         "call create_agent again with allow_duplicate set to true."})
 
-    agent_id = store.create(title, throwaway=throwaway)
+    # The record starts with what is known now: what the work is, and who it is with. The
+    # person also becomes a contact, so a later message with their name can find them.
+    agent_id = store.create(title, summary=_first_sentence(instructions), throwaway=throwaway)
     if person_email:
         store.add_person(agent_id, person_email, person_name)
+        if person_name:
+            store.add_contact(person_email, person_name)
     get_conversation_log().record_handoff(agent_id, title, instructions)
     get_execution_agent_logs().record_request(agent_id, instructions)
     failed = _dispatch(agent_id, instructions)
@@ -399,9 +411,7 @@ def handle_tool_call(name: str, arguments: Any) -> ToolResult:
     except json.JSONDecodeError:
         return ToolResult(success=False, payload={"error": "Invalid JSON"})
     except TypeError as exc:
-        return ToolResult(success=False, payload={"error": f"Invalid arguments: {exc}"})
-    except TypeError as exc:
-        return ToolResult(success=False, payload={"error": f"Missing required arguments: {exc}"})
+        return ToolResult(success=False, payload={"error": f"Missing or invalid arguments: {exc}"})
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("tool call failed", extra={"tool": name, "error": str(exc)})
         return ToolResult(success=False, payload={"error": "Failed to execute"})
