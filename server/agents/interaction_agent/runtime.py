@@ -9,6 +9,7 @@ from .tools import ToolResult, get_tool_schemas, handle_tool_call
 from ...config import get_settings
 from ...services.conversation import get_conversation_log, get_working_memory_log
 from ...openrouter_client import request_chat_completion
+from ...routing.pipeline import Routing, route_message, set_routing
 from ...logging_config import logger
 
 
@@ -55,6 +56,7 @@ class InteractionAgentRuntime:
         self.conversation_log = get_conversation_log()
         self.working_memory_log = get_working_memory_log()
         self.tool_schemas = get_tool_schemas()
+        self.last_routing: Optional[Routing] = None
 
         if not self.api_key:
             raise ValueError(
@@ -70,8 +72,9 @@ class InteractionAgentRuntime:
             self.conversation_log.record_user_message(user_message)
 
             system_prompt = build_system_prompt()
+            routing = await self._route(user_message, from_user=True)
             messages = prepare_message_with_history(
-                user_message, transcript_before, message_type="user"
+                user_message, transcript_before, message_type="user", routing=routing
             )
 
             logger.info("Processing user message through interaction agent")
@@ -105,8 +108,9 @@ class InteractionAgentRuntime:
             self.conversation_log.record_agent_message(agent_message)
 
             system_prompt = build_system_prompt()
+            routing = await self._route(agent_message, from_user=False)
             messages = prepare_message_with_history(
-                agent_message, transcript_before, message_type="agent"
+                agent_message, transcript_before, message_type="agent", routing=routing
             )
 
             logger.info("Processing execution agent results")
@@ -130,6 +134,15 @@ class InteractionAgentRuntime:
                 response="",
                 error=str(exc),
             )
+
+    # Find the candidate agents for this message and fix what the tools will accept
+    async def _route(self, text: str, *, from_user: bool) -> Optional[Routing]:
+        """Run the lookup and decider, then offer only the tools they allow this turn."""
+        routing = await route_message(text, from_user=from_user)
+        set_routing(routing)
+        self.last_routing = routing
+        self.tool_schemas = get_tool_schemas(routing)
+        return routing
 
     # Core interaction loop that handles LLM calls and tool executions until completion
     async def _run_interaction_loop(
