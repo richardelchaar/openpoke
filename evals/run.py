@@ -111,6 +111,10 @@ def main() -> None:
             for c in cases for size in sizes for r in range(args.repeats)]
     print(f"{args.version} on {args.world}: {len(cases)} cases x {len(sizes)} sizes x {args.repeats} repeats = {len(jobs)} runs")
     traces = asyncio.run(run_all(jobs, args.concurrency, "first turn"))
+    broke = [t for t in traces if t.get("crash") or any(turn.get("error") for turn in t["turns"])]
+    if len(broke) > len(traces) * 0.02:
+        sample = broke[0].get("crash") or next(turn["error"] for turn in broke[0]["turns"] if turn.get("error"))
+        sys.exit(f"{len(broke)} of {len(traces)} runs failed, so nothing was saved. First failure: {sample[:300]}")
     rows = [grade(t, by_id[t["case_id"]], world) for t in traces]
 
     # Where a question was needed and asked, send each scripted answer as a second turn.

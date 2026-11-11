@@ -174,6 +174,8 @@ async def run(job: dict) -> dict:
         return response
 
     runtime_module.request_chat_completion = recorded_request
+    from server.routing import decide as decide_module
+    decide_module.request_chat_completion = recorded_request   # the judge's call is saved and counted too
 
     # Execution agents don't run.
     class _Done:
