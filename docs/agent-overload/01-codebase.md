@@ -46,7 +46,7 @@ It shows up as three kinds of error:
 
 ## 3. The causes, in the code
 
-Ranked by how much damage I expect each to do. The baseline run will test this ranking.
+Ranked by how much damage I expected each to do, before measuring. What the baseline then showed is at the end of this section.
 
 | # | Cause | Where | Effect |
 |---|---|---|---|
@@ -60,6 +60,12 @@ Ranked by how much damage I expect each to do. The baseline run will test this r
 
 Causes 1 to 6 are about too many agents and how one gets picked. Cause 7 turns a naming slip into mixed-up context.
 
+**What measuring showed.** The ranking above was partly wrong ([07-journal.md](07-journal.md), E1 and E2):
+
+- Cause 1 costs money more than accuracy. On the model I used, the original finds a named person as well in 1,280 names as in 10. What grows is the prompt: 11,700 tokens a message at 20 agents and 40,100 at 640.
+- Cause 4 is the one that does the damage. The largest error at every size is acting when it should ask, and it usually acts on every option at once.
+- Cause 1 has a second half I had not listed: with only names to look at, the orchestrator cannot see a person the user knows who has no agent yet. It never once asked about one.
+
 ---
 
 ## 4. Can it be reproduced?
@@ -72,18 +78,22 @@ So the first thing I build is a way to show it: a fake world with a known right 
 
 ## 5. Other gaps I found
 
-Each of these is separate from overload. The ones marked **fix** are fixed on this branch in commits prefixed `gap:`. The ones marked **write-up** are described in the report with how I'd fix them.
+Each of these is separate from overload. "Fixed" means fixed on this branch. The rest are in the report, each marked as fixed there or described with how I'd fix it.
 
-| # | Gap | Where | Plan |
+| # | Gap | Where | Status |
 |---|---|---|---|
-| 1 | **The app can't be pointed at another model.** All five roles are hardcoded, and OpenRouter lists no provider serving `anthropic/claude-sonnet-4` as of Nov 9 2026. To be confirmed with a live call in the first run. | `config.py:54-58` | fix |
-| 2 | **Reply and forward send immediately.** They call Gmail directly with no draft step. Only a line in the prompt asks for confirmation. | `agents/execution_agent/tools/gmail.py:387-428` | fix |
-| 3 | **The roster file can wipe itself.** Saving opens the file for writing, which empties it, before taking the lock. A failed load then resets the list to empty, and the next save writes that. | `roster.py:27-29,44-45` | fix |
-| 4 | **Shared log files** (cause 7 above). | `log_store.py:19-24` | fix |
-| 5 | **Each agent's history grows without limit, and is cut short as it's written.** The whole log is replayed in the system prompt on every call; a cap exists in the code and is never set. Tool arguments are stored to 200 characters and results to 500, so a thread ID the agent needs later can be missing. | `agents/execution_agent/agent.py:39,73-94,121-123`; `runtime.py:33` | fix |
-| 6 | **The same agent can run twice at once.** A reminder and a user request can both start it, on one log. | `agents/interaction_agent/tools.py:141`; `trigger_scheduler.py:93` | fix |
-| 7 | **No retries.** One failed model call ends the turn. | `openrouter_client/client.py:70-88` | fix |
-| 8 | **Hitting the 8-step limit raises an error** and the user gets nothing. | `agents/interaction_agent/runtime.py:47,186` | fix |
-| 9 | **Prompt problems.** The orchestrator prompt tells it to use a `reacttomessage` tool that doesn't exist. The execution prompt still has `[TO BE FILLED IN BY USER …]` and lists 4 of its Gmail tools. | `interaction_agent/system_prompt.md:114,116`; `execution_agent/system_prompt.md:27,30-34` | fix |
-| 10 | **No tests.** | | fix |
-| 11 | **No login on the API.** Anyone who can reach the server can read the history or delete everything. | `routes/chat.py:18-45` | write-up |
+| 1 | **The app can't be pointed at another model.** All five roles were hardcoded to `anthropic/claude-sonnet-4`, which OpenRouter no longer serves: a live call returns "no provider serves this model anymore". | `config.py:54-58` | fixed |
+| 2 | **No cap on output tokens.** Without one the provider reserves the model's full output limit against the account balance, and refuses the request (402) when the balance can't cover it. | `openrouter_client/client.py:60-66` | fixed |
+| 3 | **No prompt caching.** The system prompt, about 4,400 tokens, is paid for in full on every call, and each message makes at least two calls. Caching it cut the cost per message by 40 to 55%. | `openrouter_client/client.py` | fixed |
+| 4 | **Seven modules each compute their own data path,** so the app can't be pointed at another data directory. | `services/**` | fixed |
+| 5 | **Shared log files** (cause 7 above). | `log_store.py:19-24` | fixed by agent ids |
+| 6 | **The roster file can wipe itself.** Saving opens the file for writing, which empties it, before taking the lock. A failed load then resets the list to empty, and the next save writes that. | `roster.py:27-29,44-45` | fixed by moving agents to SQLite |
+| 7 | **Errors are swallowed.** When the orchestrator fails, the log says only "Interaction agent failed" (the detail is passed where the log format never prints it) and the user gets no reply at all. | `agents/interaction_agent/runtime.py:91-97` | fixed: the log has the error and the user gets a reply |
+| 8 | **Hitting the 8-step limit raises an error** and the user gets nothing. | `agents/interaction_agent/runtime.py:47,186` | fixed: the user is told it stopped |
+| 9 | **No retries.** One failed model call ends the turn. | `openrouter_client/client.py:70-88` | fixed: two retries on a timeout, rate limit or server error |
+| 10 | **Prompt problems.** The orchestrator prompt tells it to use a `reacttomessage` tool that doesn't exist. The execution prompt still has `[TO BE FILLED IN BY USER …]` and lists 4 of its Gmail tools. | `interaction_agent/system_prompt.md:114,116`; `execution_agent/system_prompt.md:27,30-34` | fixed |
+| 11 | **Reply and forward send immediately.** They call Gmail directly with no draft step. Only a line in the prompt asks for confirmation. | `agents/execution_agent/tools/gmail.py:387-428` | see the report |
+| 12 | **Each agent's history grows without limit, and is cut short as it's written.** The whole log is replayed in the system prompt on every call; a cap exists in the code and is never set. Tool arguments are stored to 200 characters and results to 500, so a thread id the agent needs later can be missing. | `agents/execution_agent/agent.py:39,73-94,121-123`; `runtime.py:33` | partly: the agent is now given the people and thread ids from its work record; the log itself is unchanged. See the report. |
+| 13 | **The same agent can run twice at once.** A reminder and a user request can both start it, on one log. | `agents/interaction_agent/tools.py`; `trigger_scheduler.py:93` | see the report |
+| 14 | **No tests.** | | 36 unit tests and the eval added |
+| 15 | **No login on the API.** Anyone who can reach the server can read the history or delete everything. | `routes/chat.py:18-45` | see the report |

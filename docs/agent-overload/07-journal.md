@@ -161,7 +161,7 @@ What V5 does better is the turn after the answer.
 - On "no, the other Colin" the app routes to the right Colin and tells the wrongly used agent to stop. That was being marked as reaching the wrong person.
 - After a question about which person, a new agent for the chosen person counts as well as their existing one.
 
-**Decision.** Three changes for a second round, all from reading failures: each candidate now says how it was found; a question needs at least two options; and the judge's guidance covers three situations it got wrong.
+**Decision.** I made three changes from reading these failures: each candidate says how it was found; a question needs at least two options; and the judge's guidance covers three situations it got wrong. I then took them back out, because I didn't run them and the code has to match the results. They are in commit `925a9bf` and are the first thing to try next. The comparison below therefore includes a judge with a known bug: it sometimes asks "which one?" when there is one option.
 
 ---
 
@@ -185,7 +185,7 @@ What V5 does better is the turn after the answer.
 
 **Result.** There is no curve. Neither dial buys a correct question; both only add needless ones. The setting I built to ask more readily before a send moves the result by one point.
 
-**Decision.** The risk setting isn't earning its place. Unless the second round changes this, it goes.
+**Decision.** The risk setting isn't earning its place. It stays in the judge's code, which is switched off, only so these runs can be reproduced.
 
 ---
 
@@ -204,7 +204,6 @@ What V5 does better is the turn after the answer.
 
 ---
 
-*Next: the second round of V2 to V5, then the held-out world.*
 
 ---
 
@@ -235,3 +234,78 @@ What V5 does better is the turn after the answer.
 - **The original reaches the wrong person 6 times in 40.** No version with the lookup does.
 
 **Decision.** Reported as a limit. The two clear fixes are matching short forms and near-spellings of a name, and telling a recipient from someone merely mentioned. Neither is built.
+
+---
+
+## Heavy use · added because size alone was flat
+
+| | |
+|---|---|
+| Question | In the normal roster nobody has more than two pieces of work, so a bigger roster never makes one person harder to place. What happens when the roster is the same size and more crowded around the people in a case? |
+| Expected | The original gets worse. The versions with a lookup hold up better. Possibly the judge does best, since it weighs each candidate separately. |
+| Setup | All six versions, all 448 cases, 160 agents, one run. Each person in a case has six more pieces of work and ten more people share their first name; none of it shares a topic with the case. `…-dev-v*-heavy` |
+
+| | 160 agents | 160 agents, heavy use | Asks when it shouldn't | Duplicates | Right after the answer |
+|---|---|---|---|---|---|
+| V0 original | 78% | 83% | 3% | 7.4% | 59% |
+| V1 prompt only | 81% | 83% | 10% | 7.9% | 66% |
+| V2 records and lookup | 97% | 95% | 6% | 0.5% | 73% |
+| V3 required to ask | 94% | 91% | 12% | 0.0% | 75% |
+| V4 code rule | 90% | 85% | 15% | 0.0% | 49% |
+| V5 judge | 93% | 94% | 8% | 0.0% | 64% |
+
+**Result.** Partly as expected, and one surprise.
+
+- **The original's total goes up, and it is worse underneath.** With eight agents for one person in the list it can see the ambiguity, so it asks when it should 83% of the time, up from 35%. But duplicates more than double, to 7.4%, and after the user answers it gets the next step right 59% of the time, down from 83%.
+- **V2 holds: 95%.** It asks needlessly a little more.
+- **The judge does not pull ahead.** It ties V2 again.
+- **The code rule falls furthest,** to 85%, and gets the turn after an answer right less than half the time.
+- **Every version is weaker on the turn after the user answers.** That is the clearest effect of crowding.
+
+**Two grading notes, for every version.** Under heavy use a question counts if it is asked and nothing is sent, because a good question about eight pieces of work may not list them all. And corrections are left out: with ten more people sharing the name, "no, the other Gustavo" has no single right answer. I found that by reading seven "failures" in which V2 had cancelled the wrong draft and asked which Gustavo.
+
+**Decision D7 closed: V2 is the default.** Best or tied for best in every column, and the simplest.
+
+---
+
+## E7 · Held-out world, run once
+
+| | |
+|---|---|
+| Question | Does it hold on a world I never tuned on? |
+| Expected | Close to the dev result. |
+| Setup | V0 and V2, 158 cases, sizes 20 / 160 / 640, one run; V2 also under heavy use. Settings locked beforehand. `…-heldout-v0-main`, `…-heldout-v2-main`, `…-heldout-v2-heavy` |
+
+| | 20 | 160 | 640 | 160, heavy use |
+|---|---|---|---|---|
+| V0 right | 78% | 78% | 74% | not run |
+| **V2 right** | **90%** | **92%** | **92%** | **91%** |
+| V0 asks when it should | 47% | 42% | 33% | |
+| V2 asks when it should | 92% | 97% | 97% | 100% |
+| V0 asks when it shouldn't | 2% | 0% | 1% | |
+| V2 asks when it shouldn't | 7% | 7% | 7% | 11% |
+| V2 right after the answer | 88% | 82% | 78% | 77% |
+| V2 reaches the wrong person | 0% | 0% | 0% | 0% |
+| V2 tokens per message | 10,300 | 10,500 | 10,700 | 11,900 |
+| V0 tokens per message | 11,400 | 17,700 | 39,700 | |
+
+**Result.** It holds, about 4 points below the dev world (92% against 96%), and it asks needlessly about twice as often (7% against 3%). The gain over the original is 12 to 18 points.
+
+**Against the pass bars** (written before any changed version ran):
+
+| Bar | Result on held-out | |
+|---|---|---|
+| Right, 88% or more | 90 / 92 / 92% | met |
+| Asks when it should, 80% or more | 92 / 97 / 97% | met |
+| Asks when it shouldn't, 5% or less | 7 / 7 / 7% | **missed** |
+| Right after the answer, 85% or more | 88 / 82 / 78% | **missed at two sizes** |
+| Wrong person, 1% or less | 0% | met |
+| Duplicates, 1% or less | 1.4 / 2.1 / 1.4% | **missed** |
+| 640 agents within 3 points of 20 | +2 | met |
+| Tokens per message, 15,000 or less | about 10,500 | met |
+
+Five met, three missed. The misses are needless questions, the turn after an answer, and duplicates.
+
+**Not run.** The original under heavy use on this world: the credit ran out.
+
+**What this run cannot show.** The held-out world is built by the same generator as the dev world, from the same kinds of work and the same phrasings. It shows the result isn't tied to particular names or to a client-heavy inbox. It does not show how the system handles a different style of message; the stress set is the only look at that.

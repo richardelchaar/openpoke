@@ -56,9 +56,17 @@ V4's margin is chosen before its run in E4. That only needs the lookup's scores,
 
 E1 to E4 and E7 call the model. E5 and E6 are code over saved results, so they cost nothing to run.
 
-One small check sits outside this list because it isn't about routing: about 20 agents with long histories, each given a task that depends on something old, run with the whole log and with the record plus the last few turns. It reports whether the right thread ID and address were used, and the tokens per call.
+**What changed as the work went.** This section is the plan as written before the runs. What happened is in [07-journal.md](07-journal.md). The differences:
 
-**What gets tuned.** Two settings, both in code: how many candidates the lookup returns (from E6), and the V4 margin (from E5). The three risk settings are reported as three points on the curve. Everything else is a stated default.
+| Planned | What happened |
+|---|---|
+| Sizes chosen where the original starts to fail | It doesn't fail with size. Sizes are 20, 160 and 640, and a fourth roster was added: 160 agents with heavy use, where each person in a case has six more pieces of work and ten namesakes. |
+| V4's margin chosen before its run | Run at 0.25. Swept afterwards from 0 to 1: no value adds a correct question. |
+| The duplicate check measured from its traces | Not done. The duplicate rate is reported for every version instead. |
+| A final dev run of the winner before E7 | Not needed: the winner's settings were never changed after its dev run. |
+| An agent-memory check on about 20 agents | Not built. Agent memory is listed as a gap in the report. |
+| | Added: a crowded test (ten namesakes), a stress set of 40 messier messages, and a comparison of plain keyword search with the full lookup. |
+| | Three grading rules were corrected after reading failures, for every version. Each is in the journal. |
 
 ---
 
