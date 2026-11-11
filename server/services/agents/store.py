@@ -7,6 +7,7 @@ a message, and the agent reads its own record as memory.
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import sqlite3
@@ -82,7 +83,7 @@ class AgentStore:
                 yield
             finally:
                 self._batching = False
-                for agent_id in self._dirty:
+                for agent_id in sorted(self._dirty):   # a fixed order, so equal scores rank the same every time
                     self._index(agent_id)
                 self._dirty.clear()
                 self._db.commit()
@@ -227,7 +228,7 @@ class AgentStore:
         with self._lock:
             try:
                 rows = self._db.execute(
-                    "SELECT agent_id, bm25(agent_search) AS rank FROM agent_search WHERE agent_search MATCH ? ORDER BY rank",
+                    "SELECT agent_id, bm25(agent_search) AS rank FROM agent_search WHERE agent_search MATCH ? ORDER BY rank, agent_id",
                     (query,)).fetchall()
             except sqlite3.OperationalError as exc:
                 logger.warning(f"Agent search failed: {exc}")
@@ -244,4 +245,30 @@ def get_agent_store() -> AgentStore:
     with _store_lock:
         if _store is None:
             _store = AgentStore(get_data_dir() / "agents.db")
+            _adopt_roster(_store)
         return _store
+
+
+def _adopt_roster(store: AgentStore) -> None:
+    """Bring agents over from the original roster file the first time the store is used.
+
+    Each name becomes an agent with an id, and its log file is renamed to match. The
+    records start empty and fill in as the agents are used.
+    """
+    from ..execution.log_store import _slugify
+
+    roster_path = get_data_dir() / "execution_agents" / "roster.json"
+    if store.count() or not roster_path.exists():
+        return
+    try:
+        names = json.loads(roster_path.read_text())
+    except Exception as exc:
+        logger.warning(f"Could not read {roster_path}: {exc}")
+        return
+    for name in names if isinstance(names, list) else []:
+        agent_id = store.create(str(name))
+        old = roster_path.parent / f"{_slugify(str(name))}.log"
+        if old.exists():
+            old.rename(roster_path.parent / f"{_slugify(agent_id)}.log")
+    if names:
+        logger.info(f"Adopted {len(names)} agents from roster.json")

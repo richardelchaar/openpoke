@@ -103,7 +103,8 @@ def lookup(message: str, store: AgentStore, recent: List[str], limit: int = MAX_
             reasons.append(reason)
 
     for agent_id in recent[:RECENT_HANDOFFS]:
-        if store.exists(agent_id):
+        record = store.get(agent_id)
+        if record and record["status"] == "active" and not record["throwaway"]:
             add(agent_id, "recent")
     for person in people:
         for agent_id in person.agents:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +13,9 @@ OpenRouterBaseURL = "https://openrouter.ai/api/v1"
 # Without a cap OpenRouter reserves the model's full output limit against the
 # account balance, and refuses the request when the balance can't cover it.
 DEFAULT_MAX_TOKENS = 4096
+
+MAX_ATTEMPTS = 3
+RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
 class OpenRouterError(RuntimeError):
@@ -96,25 +100,28 @@ async def request_chat_completion(
 
     url = f"{base_url.rstrip('/')}/chat/completions"
 
+    # A dropped connection, a timeout, a rate limit or a server error is retried; anything
+    # else (a bad request, no credit) is not going to change on a second try.
+    last_error: Optional[Exception] = None
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                url,
-                headers=_headers(api_key=api_key),
-                json=payload,
-                timeout=60.0,  # Set reasonable timeout instead of None
-            )
+        for attempt in range(MAX_ATTEMPTS):
+            if attempt:
+                await asyncio.sleep(2 ** (attempt - 1))
+            try:
+                response = await client.post(url, headers=_headers(api_key=api_key), json=payload, timeout=60.0)
+            except httpx.HTTPError as exc:
+                last_error = OpenRouterError(f"OpenRouter request failed: {exc}")
+                continue
+            if response.status_code in RETRY_STATUS:
+                last_error = OpenRouterError(f"OpenRouter request failed ({response.status_code})")
+                continue
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 _handle_response_error(exc)
             return response.json()
-        except httpx.HTTPStatusError as exc:  # pragma: no cover - handled above
-            _handle_response_error(exc)
-        except httpx.HTTPError as exc:
-            raise OpenRouterError(f"OpenRouter request failed: {exc}") from exc
 
-    raise OpenRouterError("OpenRouter request failed: unknown error")
+    raise last_error or OpenRouterError("OpenRouter request failed: unknown error")
 
 
 __all__ = ["OpenRouterError", "request_chat_completion", "OpenRouterBaseURL"]

@@ -71,16 +71,17 @@ class Settings(BaseModel):
     summarizer_model: str = Field(default=os.getenv("OPENPOKE_SUMMARIZER_MODEL", DEFAULT_MODEL))
     email_classifier_model: str = Field(default=os.getenv("OPENPOKE_CLASSIFIER_MODEL", DEFAULT_MODEL))
 
-    # Routing: how the orchestrator finds and chooses an agent.
+    # Routing: how the orchestrator finds and chooses an agent. The defaults are the version
+    # that did best in the evals; lookup=none with prompt=v1 is the original behaviour.
     #   lookup   none = every agent's name in the prompt (the original)
     #            records = a handful of candidates found by searching agents' work records
     #   decider  who decides whether to route, create or ask:
     #            orchestrator | told_to_ask | code_rule | judge
     #   prompt   v1 = the original orchestrator prompt, v2 = the rewrite
     #   ask      how readily to ask when one candidate fits and another might: strict | balanced | loose
-    routing_lookup: str = Field(default=os.getenv("OPENPOKE_LOOKUP", "none"))
+    routing_lookup: str = Field(default=os.getenv("OPENPOKE_LOOKUP", "records"))
     routing_decider: str = Field(default=os.getenv("OPENPOKE_DECIDER", "orchestrator"))
-    routing_prompt: str = Field(default=os.getenv("OPENPOKE_PROMPT", "v1"))
+    routing_prompt: str = Field(default=os.getenv("OPENPOKE_PROMPT", "v2"))
     routing_ask: str = Field(default=os.getenv("OPENPOKE_ASK", "balanced"))
     routing_ask_margin: float = Field(default=_env_float("OPENPOKE_ASK_MARGIN", 0.25))
     judge_model: str = Field(default=os.getenv("OPENPOKE_JUDGE_MODEL", DEFAULT_MODEL))

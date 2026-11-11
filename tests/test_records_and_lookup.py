@@ -71,3 +71,25 @@ def test_a_discarded_agent_never_comes_back(store, people):
 def test_word_endings_are_ignored(store):
     agent = store.create("March renewals", summary="policies renewing in March")
     assert agent in ids(lookup("anything on the renewal?", store, recent=[]))
+
+
+def test_agents_in_the_old_roster_file_are_adopted(tmp_path, monkeypatch):
+    import json
+
+    from server.services.agents import store as store_module
+
+    folder = tmp_path / "execution_agents"
+    folder.mkdir()
+    (folder / "roster.json").write_text(json.dumps(["Email to Dana Lee"]))
+    (folder / "email-to-dana-lee.log").write_text("<agent_request>hi</agent_request>\n")
+    monkeypatch.setattr(store_module, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(store_module, "_store", None)
+    store = store_module.get_agent_store()
+    agent_id = lookup("anything on dana lee?", store, recent=[]).candidates[0].agent_id
+    assert store.get(agent_id)["title"] == "Email to Dana Lee"
+    assert (folder / f"{agent_id.replace('_', '-')}.log").exists()
+
+
+def test_a_throwaway_agent_is_never_a_candidate(store):
+    agent = store.create("Wifi password lookup", throwaway=True)
+    assert lookup("wifi password", store, recent=[agent]).candidates == []

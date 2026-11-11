@@ -110,3 +110,15 @@ def test_a_correction_may_also_tell_the_wrong_agent_to_stop():
     route = {"outcome": "route", "agents": ["a1"]}
     assert check(route, turn(["a1", "b1"]), case)["right"]
     assert check(route, turn(["b1"]), case)["error"] in ("failed", "unnecessary_ask")
+
+
+def test_an_execution_agent_is_told_its_title_and_what_it_has_acted_on(store, people, monkeypatch):
+    from server.agents.execution_agent import agent as agent_module
+    from server.services.agents import record_tool_call
+
+    monkeypatch.setattr(agent_module, "get_agent_store", lambda: store)
+    record_tool_call(store, people["claim"], "gmail_reply_to_thread",
+                     {"thread_id": "t_88", "recipient_email": "leila.sorensen@example.com", "message_body": "hi"})
+    prompt = agent_module.ExecutionAgent(people["claim"]).build_system_prompt()
+    assert "Leila Sorensen auto claim" in prompt
+    assert "leila.sorensen@example.com" in prompt and "t_88" in prompt
