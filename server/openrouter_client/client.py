@@ -9,6 +9,10 @@ from ..config import get_settings
 
 OpenRouterBaseURL = "https://openrouter.ai/api/v1"
 
+# Without a cap OpenRouter reserves the model's full output limit against the
+# account balance, and refuses the request when the balance can't cover it.
+DEFAULT_MAX_TOKENS = 4096
+
 
 class OpenRouterError(RuntimeError):
     """Raised when the OpenRouter API returns an error response."""
@@ -54,6 +58,7 @@ async def request_chat_completion(
     api_key: Optional[str] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
     base_url: str = OpenRouterBaseURL,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> Dict[str, Any]:
     """Request a chat completion and return the raw JSON payload."""
 
@@ -61,6 +66,7 @@ async def request_chat_completion(
         "model": model,
         "messages": _build_messages(messages, system),
         "stream": False,
+        "max_tokens": max_tokens,
     }
     if tools:
         payload["tools"] = tools
