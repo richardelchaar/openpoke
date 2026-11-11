@@ -163,10 +163,6 @@ How to judge:
 - If the user has just answered a question about which one, their answer settles it.
 - Different words can mean the same work ("the fender-bender" for an auto claim). Judge by meaning.
 - Do not label something "plausible" only because it shares a name. If the topic rules it out, say so.
-- "plausible" is for when the message gives no hint. If what the message says belongs naturally with one candidate's work and not with the others' ("the medication is running out" belongs with a vet visit, not with a missed payment), that candidate is "exact" and the others are not "plausible".
-- If a person has only one agent and the message is about that agent's kind of work, it is "exact".
-- A candidate found by "topic words only" belongs to someone the message did not name. If the message names a person, such a candidate is "unrelated" however close its topic is.
-- When a message names a go-between (an adjuster, an assistant) and the person the work is about, the work is that person's: their agent is "exact", and the go-between's other work is "unrelated".
 
 For each task also say:
 - "sends": true if doing it would send, reply or forward something to someone; false if it only reads or looks something up.
@@ -268,7 +264,7 @@ def count_labels(report: dict, routing: Routing, ask: str) -> List[dict]:
     """The decision, from the judge's labels.
 
     One exact match and nothing in the way: route. More than one exact, or anything
-    plausible in the way: ask, provided there are at least two things to choose between. A contact with no agent who is clearly meant, or nothing
+    plausible in the way: ask. A contact with no agent who is clearly meant, or nothing
     that fits: create. `ask` sets what counts as in the way when there is one exact match
     and something else is plausible: strict always, balanced when the task would send,
     loose never.
@@ -288,16 +284,8 @@ def count_labels(report: dict, routing: Routing, ask: str) -> List[dict]:
         doubt = bool(plausible or contacts_plausible)
         in_the_way = doubt and (ask == "strict" or (ask == "balanced" and task.get("sends", True)))
 
-        options = len(exact) + len(plausible) + len(contacts_exact) + len(contacts_plausible)
         if len(exact) == 1 and not contacts_exact and not in_the_way:
             steps.append({"do": "route", "about": about, "agents": exact})
-        elif options == 1 and plausible:
-            # One thing it could be and nothing else: there is no question to ask. The
-            # orchestrator continues that work, or starts new work if that is what this is.
-            steps.append({"do": "route", "about": about, "agents": plausible, "or_create": True})
-        elif options == 1 and contacts_plausible:
-            p = contacts_plausible[0]
-            steps.append({"do": "create", "about": about, "person": f"{p.name} <{p.email}>"})
         elif len(exact) + len(contacts_exact) >= 2 or (doubt and (in_the_way or not exact)):
             agents = exact + plausible
             options = [_option(routing, a) for a in agents] + \

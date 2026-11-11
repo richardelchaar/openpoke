@@ -78,12 +78,6 @@ def test_two_plausible_matches_ask(store, people):
     assert kinds(steps) == ["ask"]
 
 
-def test_a_single_plausible_option_is_not_a_question(store, people):
-    r = routing_for("tell Omar Ivanov the appraisal is in", store)
-    steps = count_labels(report([(people["omar"], "plausible")]), r, "strict")
-    assert kinds(steps) == ["route"] and steps[0]["or_create"]
-
-
 def test_a_plausible_contact_with_no_agent_is_an_option(store, people):
     r = routing_for("send Omar my new phone number", store)
     steps = count_labels(report([(people["omar"], "plausible")], [("omar.kaur@example.com", "plausible")]), r, "balanced")
