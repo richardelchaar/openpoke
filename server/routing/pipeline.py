@@ -64,12 +64,23 @@ async def route_message(text: str, from_user: bool = True) -> Optional[Routing]:
     return routing
 
 
+# Why a candidate is in the list, as the orchestrator and the judge are told it.
+FOUND_BY = {
+    "recent": "used in the last few messages",
+    "person": "the person named in the message",
+    "first_name": "a first name in the message",
+    "chat": "the person in the last message shown to the user",
+    "topic": "topic words only",
+}
+
+
 def render_candidates(routing: Routing) -> str:
     if not routing.lookup.candidates:
         return "<candidate_agents>\nNone\n</candidate_agents>"
     blocks: List[str] = []
     for c in routing.lookup.candidates:
-        lines = [f'<agent id="{escape(c.agent_id, quote=True)}" title="{escape(c.title, quote=True)}">']
+        found = ", ".join(FOUND_BY[w] for w in c.why)
+        lines = [f'<agent id="{escape(c.agent_id, quote=True)}" title="{escape(c.title, quote=True)}" found_by="{found}">']
         if c.people:
             lines.append("people: " + ", ".join(escape(f"{p['name']} <{p['email']}>".strip()) for p in c.people[:4]))
         if c.subjects:
