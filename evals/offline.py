@@ -3,6 +3,7 @@ over the cases.
 
     python -m evals.offline lookup      how often the right agent is among the candidates
     python -m evals.offline tradeoff    what each ask setting costs in needless questions
+    python -m evals.offline search      plain keyword search against the full lookup
 
 `tradeoff` reads the judge's saved labels from the latest v5 run, so that run has to exist.
 """
@@ -110,6 +111,35 @@ def lookup_quality(world_name: str = "dev") -> None:
     print(f"{'contact with no agent is found':34}" + "".join(f"{pct(*contacts[s]):>9}" for s in SIZES))
 
 
+# -- plain search against the full lookup --------------------------------------------
+
+def search_only(world_name: str = "dev", size: int = 640) -> None:
+    """How far keyword search over the records gets with nothing else: no recent
+    hand-offs, no chat, no contacts. This is the simple idea the lookup starts from."""
+    from server.routing.lookup import STOP_WORDS, lookup, words
+
+    world, cases = load(world_name), load_cases(world_name)
+    totals = defaultdict(lambda: [0, 0, 0])
+    for case in cases:
+        need = wanted(case)
+        if need is None:
+            continue
+        store = store_for(world, case, size)
+        text = " ".join(w for w in words(case["message"]) if w not in STOP_WORDS)
+        plain = {agent_id for agent_id, _ in store.search(text)[:10]}
+        full = {c.agent_id for c in lookup(case["message"], store, recent_for(case),
+                                           last_shown=last_shown_for(case)).candidates}
+        for key in (case["category"], "all"):
+            totals[key][0] += all(a in plain for a in need)
+            totals[key][1] += all(a in full for a in need)
+            totals[key][2] += 1
+    print(f"{world_name}, {size} agents: every agent the case needs is among the candidates\n")
+    print(f"{'':34}{'search only':>12}{'full lookup':>12}{'cases':>7}")
+    for key in sorted(totals, key=lambda k: (k != "all", k)):
+        plain, full, n = totals[key]
+        print(f"{key:34}{pct(plain, n):>12}{pct(full, n):>12}{n:>7}")
+
+
 # -- the trade-off -------------------------------------------------------------------
 
 def asked(steps: List[dict]) -> bool:
@@ -169,4 +199,4 @@ def tradeoff(world_name: str = "dev") -> None:
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "lookup"
     world_name = sys.argv[2] if len(sys.argv) > 2 else "dev"
-    {"lookup": lookup_quality, "tradeoff": tradeoff}[what](world_name)
+    {"lookup": lookup_quality, "tradeoff": tradeoff, "search": search_only}[what](world_name)

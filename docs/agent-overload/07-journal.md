@@ -127,6 +127,8 @@ The one failure was **0 of 12** on follow-ups to an email alert. "Reply to that"
 
 **Decision.** Added a fourth source: when a message names nobody, the people named in the last thing the user was shown. 12 of 12 after the change. The candidate limit stays at 10; nothing here argues for another value.
 
+**Plain search against the full lookup** (`python -m evals.offline search`, 640 agents). Keyword search over the records with nothing else finds the agents a case needs 88% of the time. The full lookup finds them 100%. Everything plain search misses is a message that names nobody: pronoun follow-ups, follow-ups to an email alert, and follow-ups after a question, each 0% against 100%. It also can't see a contact who has no agent. So search is most of it, and the recent hand-offs, the last message shown and the contacts are what close the gap.
+
 **Not covered.** No case combines different wording with no name, which is where keyword search would miss. That remains untested, and it is the case for adding embeddings later.
 
 ---
