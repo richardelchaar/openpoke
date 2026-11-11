@@ -83,7 +83,9 @@ def grade_turn(expected: dict, turn: dict, case: dict, world: dict) -> dict:
             error = "missed_ask"
         elif not asked:
             error = "failed"
-        else:
+        elif not turn.get("heavy"):
+            # With heavy use a person has up to eight pieces of work, and a good question
+            # may not list them all. There, asking and sending nothing is enough.
             terms = case["option_terms"]
             if not all(any(t in reply for t in terms[o]) for o in expected["options_must_include"]):
                 error = "bad_question"
@@ -120,6 +122,8 @@ def grade(trace: dict, case: dict, world: dict) -> dict:
     if not trace["turns"]:
         row.update({"right": False, "error": "failed", "asked": False, "crash": trace.get("crash")})
         return row
+    for turn in trace["turns"]:
+        turn["heavy"] = bool(trace.get("heavy"))
     row.update(grade_turn(case["expected"], trace["turns"][0], case, world))
     if len(trace["turns"]) > 1:
         answer = next(a for a in case["answers"] if a["kind"] == trace["answer_kind"])

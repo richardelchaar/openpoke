@@ -447,6 +447,7 @@ class CaseBuilder:
 
 
 def load_cases(world: str) -> List[dict]:
+    """The frozen cases for a world. "dev.stress" names the separate stress set."""
     return [json.loads(line) for line in (CASE_DIR / f"{world}.jsonl").read_text().splitlines() if line.strip()]
 
 

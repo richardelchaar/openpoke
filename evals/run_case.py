@@ -41,46 +41,59 @@ VERSIONS: Dict[str, Dict[str, str]] = {
 
 # -- the roster for one case ---------------------------------------------------------
 
-def roster_for(world: dict, case: dict, size: int, crowd: int = 0) -> List[str]:
+def roster_for(world: dict, case: dict, size: int, crowd: int = 0, heavy: bool = False) -> List[str]:
     """The agents that exist for this case: the ones it needs, then filler up to `size`.
 
     Filler is taken from the front of one fixed order, so a bigger roster is a smaller
     one with more added. Agents are listed oldest first, as the app would have them.
 
-    With `crowd`, that many extra people are added for each first name in the case. They
-    share the first name and nothing else, so the right answer stays the same.
+    With `crowd`, that many extra people are added for each first name in the case. With
+    `heavy`, each person in the case also gets six more pieces of work. Both share nothing
+    with what the case is about, so the right answer stays the same, and both count toward
+    `size`: the roster is no bigger, only more crowded around the people in the case.
     """
     required = list(case["required"])
-    extra = crowd_for(world, case, crowd) if crowd else []
+    extra = extra_for(world, case, "crowd", crowd) if crowd else []
+    if heavy:
+        extra += extra_for(world, case, "heavy", 6)
     taken = set(required) | set(extra)
     fill = [aid for aid in world["pool_order"] if aid not in taken]
     chosen = required + extra + fill[: max(0, size - len(taken))]
     return sorted(chosen, key=lambda aid: (world["works"][aid]["started"], aid))
 
 
-def crowd_for(world: dict, case: dict, per_name: int) -> List[str]:
+def extra_for(world: dict, case: dict, tag: str, limit: int) -> List[str]:
+    """Extra agents around the people in a case: other people with the same first name
+    (`crowd`), or more work for the same people (`heavy`)."""
     from evals.cases.build import STOP, words
     from evals.worlds.catalogue import BY_KEY
 
     works, people = world["works"], world["people"]
-    firsts = {people[works[aid]["person"]]["first"] for aid in case["required"] if works[aid]["person"]}
+    owners = {works[aid]["person"] for aid in case["required"] if works[aid]["person"]}
+    firsts = {people[pid]["first"] for pid in owners}
     if case["expected"].get("person"):
         firsts.add(case["expected"]["person"]["first"])
-    # Nothing in the crowd may be about the same kind of thing as the case, or share a
-    # telling word with the message.
+    # Nothing added may be about the same kind of thing as the case, or share a telling
+    # word with the message.
     families = {works[aid]["family"] for aid in case["required"]}
     if case.get("new_kind"):
         families.add(BY_KEY[case["new_kind"]].family)
     name_words = {n.lower() for p in people.values() for n in (p["first"], p["last"])}
     telling = {t for t in words(case["message"]) if t not in STOP and t not in name_words and len(t) > 3}
 
+    def fits(aid: str) -> bool:
+        w = works[aid]
+        return (w["tag"] == tag and w["family"] not in families
+                and not telling & set(words(" ".join(w[k] for k in ("label", "detail", "subject", "summary")))))
+
     out: List[str] = []
-    for first in sorted(firsts):
-        matches = [aid for aid in sorted(works) if works[aid]["tag"] == "crowd"
-                   and people[works[aid]["person"]]["first"] == first
-                   and works[aid]["family"] not in families
-                   and not telling & set(words(" ".join(works[aid][k] for k in ("label", "detail", "subject", "summary"))))]
-        out.extend(matches[:per_name])
+    groups = sorted(firsts) if tag == "crowd" else sorted(owners)
+    for group in groups:
+        if tag == "crowd":
+            matches = [aid for aid in sorted(works) if fits(aid) and people[works[aid]["person"]]["first"] == group]
+        else:
+            matches = [aid for aid in sorted(works) if fits(aid) and works[aid]["person"] == group]
+        out.extend(matches[:limit])
     return out
 
 
@@ -115,7 +128,11 @@ async def run(job: dict) -> dict:
     from evals.worlds.generate import load
 
     world = load(job["world"])
-    case = next(c for c in load_cases(job["world"]) if c["id"] == job["case_id"])
+    if job.get("heavy"):
+        from evals.worlds.heavy import NAMESAKES, load_heavy
+        world = load_heavy(world)
+        job = {**job, "crowd": NAMESAKES}
+    case = next(c for c in load_cases(job.get("case_set") or job["world"]) if c["id"] == job["case_id"])
     version, repeat = job["version"], job["repeat"]
     replay_only = bool(job.get("replay_only"))
 
@@ -143,7 +160,7 @@ async def run(job: dict) -> dict:
 
     conversation_log_module.now_in_user_timezone = fixed_now
 
-    roster = roster_for(world, case, job["size"], job.get("crowd", 0))
+    roster = roster_for(world, case, job["size"], job.get("crowd", 0), bool(job.get("heavy")))
     materialize.write_world(world, roster, case, version, data_dir)
 
     # Save and replay model responses.
@@ -220,7 +237,7 @@ async def run(job: dict) -> dict:
 
     trace: Dict[str, Any] = {
         "case_id": case["id"], "world": job["world"], "version": version, "size": job["size"],
-        "repeat": repeat, "crowd": job.get("crowd", 0), "roster_size": len(roster), "answer_kind": job.get("answer_kind"), "turns": [],
+        "repeat": repeat, "crowd": job.get("crowd", 0), "heavy": bool(job.get("heavy")), "roster_size": len(roster), "answer_kind": job.get("answer_kind"), "turns": [],
     }
     trace["turns"].append(await one_turn(case["message"]))
     answer = next((a for a in case.get("answers", []) if a["kind"] == job.get("answer_kind")), None)

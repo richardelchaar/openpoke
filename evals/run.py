@@ -97,15 +97,23 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=16)
     parser.add_argument("--crowd", type=int, default=0,
                         help="add this many extra people for each first name in a case")
+    parser.add_argument("--heavy", action="store_true",
+                        help="heavy use: six more pieces of work for each person in a case, and ten namesakes")
+    parser.add_argument("--set", default="", help="a named case set beside the main one, e.g. stress")
     parser.add_argument("--tag", default="")
     parser.add_argument("--replay-only", action="store_true", help="use saved model responses, call nothing")
     args = parser.parse_args()
 
     world = load(args.world)
-    cases = pick_cases(load_cases(args.world), args)
+    if args.heavy:
+        from .worlds.heavy import load_heavy
+        world = load_heavy(world)
+    case_set = f"{args.world}.{args.set}" if args.set else args.world
+    cases = pick_cases(load_cases(case_set), args)
     by_id = {c["id"]: c for c in cases}
     sizes = [int(s) for s in args.sizes.split(",")]
-    base = {"world": args.world, "version": args.version, "replay_only": args.replay_only, "crowd": args.crowd}
+    base = {"world": args.world, "version": args.version, "replay_only": args.replay_only, "crowd": args.crowd, "heavy": args.heavy,
+            "case_set": case_set}
 
     jobs = [{**base, "case_id": c["id"], "size": size, "repeat": r}
             for c in cases for size in sizes for r in range(args.repeats)]
