@@ -103,3 +103,10 @@ def test_ask_needs_a_question_that_names_every_option():
 def test_chat_is_wrong_if_an_agent_is_used():
     assert check({"outcome": "none"}, turn(reply="anytime"))["right"]
     assert check({"outcome": "none"}, turn(created=[{"name": "x"}]))["error"] == "unnecessary_agent"
+
+
+def test_a_correction_may_also_tell_the_wrong_agent_to_stop():
+    case = {"category": "correction", "recent_chat": [{"tag": "handoff", "agent": "b1", "text": "x"}]}
+    route = {"outcome": "route", "agents": ["a1"]}
+    assert check(route, turn(["a1", "b1"]), case)["right"]
+    assert check(route, turn(["b1"]), case)["error"] in ("failed", "unnecessary_ask")

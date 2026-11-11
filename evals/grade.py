@@ -49,6 +49,10 @@ def grade_turn(expected: dict, turn: dict, case: dict, world: dict) -> dict:
 
     elif outcome == "route":
         want = set(expected["agents"])
+        if case.get("category") == "correction":
+            # "No, the other Colin": telling the agent that was wrongly used to stop is
+            # part of a good correction, so contacting it again is not held against it.
+            got -= {e["agent"] for e in case["recent_chat"] if e["tag"] == "handoff"} - want
         if got == want and not created:
             pass
         elif not got and not created:
@@ -119,7 +123,10 @@ def grade(trace: dict, case: dict, world: dict) -> dict:
     row.update(grade_turn(case["expected"], trace["turns"][0], case, world))
     if len(trace["turns"]) > 1:
         answer = next(a for a in case["answers"] if a["kind"] == trace["answer_kind"])
-        row["after"] = grade_turn(answer["expected"], trace["turns"][1], case, world)
+        after = grade_turn(answer["expected"], trace["turns"][1], case, world)
+        if not after["right"] and _new_agent_for_the_chosen_person(answer, trace["turns"][1], case, world):
+            after = {"right": True, "error": None, "asked": False}
+        row["after"] = after
     calls = [c for turn in trace["turns"][:1] for c in turn["calls"]]
     row.update({
         "model_calls": len(calls),
@@ -129,6 +136,21 @@ def grade(trace: dict, case: dict, world: dict) -> dict:
         "seconds": sum(c["seconds"] for c in calls),
     })
     return row
+
+
+WHICH_PERSON = {"same_first_name_vague", "agent_or_contact"}
+
+
+def _new_agent_for_the_chosen_person(answer: dict, turn: dict, case: dict, world: dict) -> bool:
+    """Where the question was which person was meant, and the user has now said, the
+    request may go to that person's existing agent or to a new agent for them. Which of
+    the two is the design choice this project leaves unscored, so both count."""
+    if case.get("base_category", case["category"]) not in WHICH_PERSON or answer["expected"]["outcome"] != "route":
+        return False
+    if turn["existing"] or not turn["created"]:
+        return False
+    owner = world["people"][world["works"][answer["expected"]["agents"][0]]["person"]]
+    return all(_is_for(c, owner) for c in turn["created"])
 
 
 # -- summaries ---------------------------------------------------------------------
