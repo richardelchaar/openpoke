@@ -205,3 +205,33 @@ What V5 does better is the turn after the answer.
 ---
 
 *Next: the second round of V2 to V5, then the held-out world.*
+
+---
+
+## Stress set · written after the main results
+
+| | |
+|---|---|
+| Question | The main cases always spell a name the way the contacts do. What happens when a message doesn't? |
+| Expected | Every version does worse, and the lookup does worst on names it can't match. |
+| Setup | 40 messages in 7 kinds, 160 agents, one run per version. `…-dev-v*-stress`. Not used to tune anything. |
+
+| Right, of the cases in each kind | V0 | V1 | V2 | V3 | V4 | V5 |
+|---|---|---|---|---|---|---|
+| Short form of a first name ("ask Wes…") | 4/6 | 3/6 | 1/6 | 3/6 | 3/6 | 1/6 |
+| Misspelt surname ("Colin Pachceo") | 6/6 | 6/6 | 6/6 | 5/6 | 5/6 | 5/6 |
+| Surname alone ("ask Oduya…") | 3/6 | 2/6 | 6/6 | 6/6 | 6/6 | 6/6 |
+| Lowercase with a typo in the first name | 5/6 | 5/6 | 3/6 | 3/6 | 4/6 | 4/6 |
+| No name, topic and detail | 1/5 | 1/5 | 5/5 | 5/5 | 5/5 | 5/5 |
+| No name, topic in other words | 1/5 | 1/5 | 5/5 | 5/5 | 5/5 | 5/5 |
+| Two people named, one is the recipient | 5/6 | 4/6 | 2/6 | 0/6 | 4/6 | 4/6 |
+| **All 40** | **25** | **22** | **28** | **27** | **32** | **30** |
+
+**Result.** As expected, every version is well below its main-set score: 63% for the original and 68 to 80% for the others. With 40 cases, the gaps between the changed versions are within noise.
+
+- **The lookup wins where there is no name to match:** a surname alone and no name at all, 16 of 16 against the original's 5 of 16. The original mostly creates a duplicate there.
+- **The lookup loses on a short form of a first name:** "Wes" is not "Wesley", names are matched as whole words, so the right agent is never a candidate. The original reads the whole list and can make the leap.
+- **Two people in one message** confuses the versions with a lookup: both people's agents are candidates, and the message is treated as two tasks or as a question.
+- **The original reaches the wrong person 6 times in 40.** No version with the lookup does.
+
+**Decision.** Reported as a limit. The two clear fixes are matching short forms and near-spellings of a name, and telling a recipient from someone merely mentioned. Neither is built.
