@@ -66,20 +66,22 @@ One small check sits outside this list because it isn't about routing: about 20 
 
 I write the bars into this file **after E2 and before any fixed version is run**, because sensible targets depend on the baseline. Each bar is a number for one rate at one roster size. A missed bar is reported as missed.
 
-The bars will cover:
+Written on Nov 10 after the baseline (run `20261110-202454-dev-v0-baseline`), before any fixed version was run. The original's figures are for 20 / 160 / 640 agents. A bar has to hold at every size.
 
-| Rate | Direction |
-|---|---|
-| Right outcome, overall and per group | Higher than V0 by a stated margin |
-| Wrong person | Lower than V0 by a stated margin |
-| Duplicates | Lower than V0 by a stated margin |
-| Asked when it should | At or above a stated level |
-| Asked when it shouldn't | At or below a stated level |
-| Right after the answer | At or above a stated level |
-| Right outcome at the largest size against the smallest | Within a stated gap |
-| Cost and time per message | At or below a stated multiple of V0 |
+| Rate | The original | Bar for the fix |
+|---|---|---|
+| Right outcome, overall | 80% / 76% / 77% | 88% or more |
+| Asked when it should | 45% / 35% / 35% | 80% or more |
+| Asked when it shouldn't | 1% / 1% / 1% | 5% or less |
+| Right after the answer | 82% / 77% / 78% | 85% or more |
+| Wrong person | 2.6% / 1.6% / 0.7% | 1% or less |
+| Duplicates | 1.2% / 3.0% / 3.9% | 1% or less |
+| Right outcome at 640 agents against 20 | the same | Within 3 points |
+| Tokens per message | 11,700 / 18,200 / 40,200 | 15,000 or less at every size |
 
-*(Bars to be filled in after E2.)*
+**Two categories are left out of these rates.** New work for a person who already has an agent, and one-off lookups. The original is told to reuse an agent that has useful context, so when it puts a person's new work into their existing agent it is doing as designed. I prefer one agent per piece of work, but that is my design choice and not the original's mistake. So these two are reported as behaviour (how often each version reuses an existing agent: the original does so in 54% / 38% / 26% of new-work cases) and not counted as right or wrong.
+
+The original was run three times. Its overall rate moved by 1.2 points between repeats, and 90% of cases gave the same result all three times. So each fixed version is run once per size, and a difference of under 2 points overall is treated as a tie.
 
 ---
 
