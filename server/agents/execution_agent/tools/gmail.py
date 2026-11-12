@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, List, Optional
 
+from server.services.approvals import ApprovalError, get_approval_store
 from server.services.execution import get_execution_agent_logs
 from server.services.gmail import execute_gmail_tool, get_active_gmail_user_id
 
@@ -71,7 +72,7 @@ _SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "gmail_execute_draft",
-            "description": "Send a previously created Gmail draft using Composio.",
+            "description": "Send a draft made with gmail_create_draft. It is sent only if the user has approved it; otherwise nothing is sent and you get its approval_id.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -89,7 +90,7 @@ _SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "gmail_forward_email",
-            "description": "Forward an existing Gmail message with optional additional context.",
+            "description": "Prepare a forward of an existing Gmail message. Nothing is sent until the user approves it: this returns an approval_id.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -115,7 +116,7 @@ _SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "gmail_reply_to_thread",
-            "description": "Send a reply within an existing Gmail thread via Composio.",
+            "description": "Prepare a reply within an existing Gmail thread. Nothing is sent until the user approves it: this returns an approval_id.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -162,6 +163,21 @@ _SCHEMAS: List[Dict[str, Any]] = [
                     },
                 },
                 "required": ["thread_id", "recipient_email", "message_body"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "gmail_send_approved",
+            "description": "Send an email the user has approved, exactly as it was approved. Use the approval_id from the draft, reply or forward.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "approval_id": {"type": "string", "description": "The approval_id the email was given when it was prepared."},
+                },
+                "required": ["approval_id"],
                 "additionalProperties": False,
             },
         },
@@ -369,18 +385,26 @@ def gmail_create_draft(
     composio_user_id = get_active_gmail_user_id()
     if not composio_user_id:
         return {"error": "Gmail not connected. Please connect Gmail in settings first."}
-    return _execute("GMAIL_CREATE_EMAIL_DRAFT", composio_user_id, arguments)
+    result = _execute("GMAIL_CREATE_EMAIL_DRAFT", composio_user_id, arguments)
+    draft_id = _find_draft_id(result)
+    if not draft_id:
+        return {**result, "approval": "The draft was created, but its id could not be read, so it cannot be sent."}
+    held = get_approval_store().hold(
+        "draft", recipient=recipient_email, subject=subject, body=body,
+        gmail_args={"draft_id": draft_id}, draft_id=draft_id)
+    return {**result, **_held_reply(held)}
 
 
 # Send a previously created Gmail draft using Composio
 def gmail_execute_draft(
     draft_id: str,
 ) -> Dict[str, Any]:
-    arguments = {"draft_id": draft_id}
-    composio_user_id = get_active_gmail_user_id()
-    if not composio_user_id:
-        return {"error": "Gmail not connected. Please connect Gmail in settings first."}
-    return _execute("GMAIL_SEND_DRAFT", composio_user_id, arguments)
+    held = get_approval_store().for_draft(draft_id)
+    if held is None:
+        return {"error": "That draft was not made with gmail_create_draft, so it has no approval and cannot be sent."}
+    if not held["approved_at"]:
+        return _held_reply(held)
+    return gmail_send_approved(held["id"])
 
 
 # Forward an existing Gmail message with optional additional context
@@ -394,10 +418,10 @@ def gmail_forward_email(
         "recipient_email": recipient_email,
         "additional_text": additional_text,
     }
-    composio_user_id = get_active_gmail_user_id()
-    if not composio_user_id:
-        return {"error": "Gmail not connected. Please connect Gmail in settings first."}
-    return _execute("GMAIL_FORWARD_MESSAGE", composio_user_id, arguments)
+    held = get_approval_store().hold(
+        "forward", recipient=recipient_email, body=additional_text or "",
+        gmail_args={k: v for k, v in arguments.items() if v is not None})
+    return _held_reply(held)
 
 
 # Send a reply within an existing Gmail thread via Composio
@@ -421,10 +445,63 @@ def gmail_reply_to_thread(
         "is_html": is_html,
         "attachment": attachment,
     }
+    held = get_approval_store().hold(
+        "reply", recipient=recipient_email, body=message_body,
+        gmail_args={k: v for k, v in arguments.items() if v is not None})
+    return _held_reply(held)
+
+
+# Send an email the user approved, exactly as it was approved
+def gmail_send_approved(approval_id: str) -> Dict[str, Any]:
     composio_user_id = get_active_gmail_user_id()
     if not composio_user_id:
         return {"error": "Gmail not connected. Please connect Gmail in settings first."}
-    return _execute("GMAIL_REPLY_TO_THREAD", composio_user_id, arguments)
+    store = get_approval_store()
+    try:
+        held = store.take_for_sending(approval_id)
+    except ApprovalError as exc:
+        return {"error": str(exc), "sent": False}
+    try:
+        result = _execute(_SEND_ACTION[held["kind"]], composio_user_id, held["gmail_args"])
+    except Exception:
+        store.put_back(approval_id)
+        raise
+    return {**result, "sent": True, "approval_id": approval_id}
+
+
+_SEND_ACTION = {"draft": "GMAIL_SEND_DRAFT", "reply": "GMAIL_REPLY_TO_THREAD", "forward": "GMAIL_FORWARD_MESSAGE"}
+
+
+def _held_reply(held: Dict[str, Any]) -> Dict[str, Any]:
+    """What an agent is told about an email that is waiting for the user."""
+    what = {"draft": "Draft", "reply": "Reply", "forward": "Forward"}[held["kind"]]
+    return {
+        "sent": False,
+        "approval_id": held["id"],
+        "approval": (f"{what} to {held['recipient']} is held and has not been sent. In your final message, give "
+                     f"Poke the approval_id, the recipient, the subject and the exact text, so the user can see "
+                     f"it and approve it. Once Poke says it is approved, send it with gmail_send_approved."),
+    }
+
+
+def _find_draft_id(result: Any) -> Optional[str]:
+    """Gmail's id for a new draft, wherever Composio put it in the response."""
+    if isinstance(result, dict):
+        for key in ("draft_id", "draftId"):
+            if isinstance(result.get(key), str):
+                return result[key]
+        if isinstance(result.get("id"), str) and isinstance(result.get("message"), dict):
+            return result["id"]
+        for value in result.values():
+            found = _find_draft_id(value)
+            if found:
+                return found
+    elif isinstance(result, list):
+        for value in result:
+            found = _find_draft_id(value)
+            if found:
+                return found
+    return None
 
 
 # Delete a specific Gmail draft using the Composio Gmail integration
@@ -526,6 +603,7 @@ def build_registry(agent_name: str) -> Dict[str, Callable[..., Any]]:  # noqa: A
         "gmail_delete_draft": gmail_delete_draft,
         "gmail_forward_email": gmail_forward_email,
         "gmail_reply_to_thread": gmail_reply_to_thread,
+        "gmail_send_approved": gmail_send_approved,
         "gmail_get_contacts": gmail_get_contacts,
         "gmail_get_people": gmail_get_people,
         "gmail_list_drafts": gmail_list_drafts,
@@ -541,6 +619,7 @@ __all__ = [
     "gmail_delete_draft",
     "gmail_forward_email",
     "gmail_reply_to_thread",
+    "gmail_send_approved",
     "gmail_get_contacts",
     "gmail_get_people",
     "gmail_list_drafts",

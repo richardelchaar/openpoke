@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+from ...config import get_settings
+from ...services.agents import get_agent_store
 from ...services.execution import get_execution_agent_logs
 from ...logging_config import logger
 
@@ -52,12 +54,36 @@ class ExecutionAgent:
     # Generate system prompt template with agent name and purpose derived from name
     def build_system_prompt(self) -> str:
         """Build the system prompt for this agent."""
-        agent_purpose = f"Handle tasks related to: {self.name}"
-
-        return SYSTEM_PROMPT_TEMPLATE.format(
-            agent_name=self.name,
-            agent_purpose=agent_purpose
+        record = self._work_record()
+        if record is None:
+            return SYSTEM_PROMPT_TEMPLATE.format(
+                agent_name=self.name,
+                agent_purpose=f"Handle tasks related to: {self.name}",
+            )
+        # With work records on, the agent is known by an id. Its title and what it has
+        # acted on come from its record, with exact addresses and thread ids.
+        prompt = SYSTEM_PROMPT_TEMPLATE.format(
+            agent_name=record["title"],
+            agent_purpose=record["summary"] or f"Handle tasks related to: {record['title']}",
         )
+        facts = []
+        if record["people"]:
+            facts.append("People: " + ", ".join(f"{p['name']} <{p['email']}>".strip() for p in record["people"]))
+        threads = [t for t in record["threads"] if not t["thread_id"].startswith("subject:")]
+        if threads:
+            facts.append("Threads: " + "; ".join(f"\"{t['subject']}\" (thread_id {t['thread_id']})" for t in threads))
+        if record["notes"]:
+            facts.append("Earlier searches and reminders: " + "; ".join(n["text"] for n in record["notes"]))
+        return prompt + ("\n\n# Work record\n" + "\n".join(facts) if facts else "")
+
+    def _work_record(self) -> Optional[dict]:
+        if get_settings().routing_lookup != "records":
+            return None
+        try:
+            return get_agent_store().get(self.name)
+        except Exception as exc:  # the record is extra context; the agent can work without it
+            logger.warning(f"Could not read work record for {self.name}: {exc}")
+            return None
 
     # Combine base system prompt with conversation history, applying conversation limits
     def build_system_prompt_with_history(self) -> str:

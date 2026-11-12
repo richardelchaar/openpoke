@@ -5,10 +5,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
 from .agent import build_system_prompt, prepare_message_with_history
-from .tools import ToolResult, get_tool_schemas, handle_tool_call
+from .tools import ToolResult, get_tool_schemas, handle_tool_call, set_turn_origin
 from ...config import get_settings
 from ...services.conversation import get_conversation_log, get_working_memory_log
 from ...openrouter_client import request_chat_completion
+from ...routing.pipeline import Routing, route_message, set_routing
 from ...logging_config import logger
 
 
@@ -41,6 +42,10 @@ class _LoopSummary:
     execution_agents: Set[str] = field(default_factory=set)
 
 
+FAILURE_REPLY = "Something went wrong on my side and I couldn't finish that. Give it another go in a moment."
+STEP_LIMIT_REPLY = "That took more steps than I allow myself in one go, so I've stopped. Tell me which part to pick up first."
+
+
 class InteractionAgentRuntime:
     """Manages the interaction agent's request processing."""
 
@@ -55,6 +60,7 @@ class InteractionAgentRuntime:
         self.conversation_log = get_conversation_log()
         self.working_memory_log = get_working_memory_log()
         self.tool_schemas = get_tool_schemas()
+        self.last_routing: Optional[Routing] = None
 
         if not self.api_key:
             raise ValueError(
@@ -70,8 +76,9 @@ class InteractionAgentRuntime:
             self.conversation_log.record_user_message(user_message)
 
             system_prompt = build_system_prompt()
+            routing = await self._route(user_message, from_user=True)
             messages = prepare_message_with_history(
-                user_message, transcript_before, message_type="user"
+                user_message, transcript_before, message_type="user", routing=routing
             )
 
             logger.info("Processing user message through interaction agent")
@@ -89,7 +96,8 @@ class InteractionAgentRuntime:
             )
 
         except Exception as exc:
-            logger.error("Interaction agent failed", extra={"error": str(exc)})
+            logger.error(f"Interaction agent failed: {exc}")
+            self._tell_user_it_failed()
             return InteractionResult(
                 success=False,
                 response="",
@@ -105,8 +113,9 @@ class InteractionAgentRuntime:
             self.conversation_log.record_agent_message(agent_message)
 
             system_prompt = build_system_prompt()
+            routing = await self._route(agent_message, from_user=False)
             messages = prepare_message_with_history(
-                agent_message, transcript_before, message_type="agent"
+                agent_message, transcript_before, message_type="agent", routing=routing
             )
 
             logger.info("Processing execution agent results")
@@ -124,12 +133,30 @@ class InteractionAgentRuntime:
             )
 
         except Exception as exc:
-            logger.error("Interaction agent (agent message) failed", extra={"error": str(exc)})
+            logger.error(f"Interaction agent (agent message) failed: {exc}")
+            self._tell_user_it_failed()
             return InteractionResult(
                 success=False,
                 response="",
                 error=str(exc),
             )
+
+    def _tell_user_it_failed(self) -> None:
+        """A failure used to leave the user with no reply at all."""
+        try:
+            self.conversation_log.record_reply(FAILURE_REPLY)
+        except Exception:  # pragma: no cover - nothing more to be done
+            pass
+
+    # Find the candidate agents for this message and fix what the tools will accept
+    async def _route(self, text: str, *, from_user: bool) -> Optional[Routing]:
+        """Run the lookup and decider, then offer only the tools they allow this turn."""
+        routing = await route_message(text, from_user=from_user)
+        set_routing(routing)
+        set_turn_origin(from_user)
+        self.last_routing = routing
+        self.tool_schemas = get_tool_schemas(routing, from_user=from_user)
+        return routing
 
     # Core interaction loop that handles LLM calls and tool executions until completion
     async def _run_interaction_loop(
@@ -183,7 +210,11 @@ class InteractionAgentRuntime:
                 }
                 messages.append(tool_message)
         else:
-            raise RuntimeError("Reached tool iteration limit without final response")
+            # Out of steps. Whatever was handed off stands; the user is told instead of left waiting.
+            logger.warning("Interaction loop reached its step limit")
+            if not summary.user_messages:
+                summary.user_messages.append(STEP_LIMIT_REPLY)
+                self.conversation_log.record_reply(STEP_LIMIT_REPLY)
 
         if not summary.user_messages and not summary.last_assistant_text:
             logger.warning("Interaction loop exited without assistant content")

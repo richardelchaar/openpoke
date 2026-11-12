@@ -30,11 +30,25 @@ _load_env_file()
 
 DEFAULT_APP_NAME = "OpenPoke Server"
 DEFAULT_APP_VERSION = "0.3.0"
+DEFAULT_MODEL = os.getenv("OPENPOKE_MODEL", "anthropic/claude-haiku-5.5")
+
+
+def get_data_dir() -> Path:
+    """Directory for everything the server stores on disk."""
+    override = os.getenv("OPENPOKE_DATA_DIR")
+    return Path(override) if override else Path(__file__).resolve().parent / "data"
 
 
 def _env_int(name: str, fallback: int) -> int:
     try:
         return int(os.getenv(name, str(fallback)))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _env_float(name: str, fallback: float) -> float:
+    try:
+        return float(os.getenv(name, str(fallback)))
     except (TypeError, ValueError):
         return fallback
 
@@ -50,12 +64,34 @@ class Settings(BaseModel):
     server_host: str = Field(default=os.getenv("OPENPOKE_HOST", "0.0.0.0"))
     server_port: int = Field(default=_env_int("OPENPOKE_PORT", 8001))
 
-    # LLM model selection
-    interaction_agent_model: str = Field(default="anthropic/claude-sonnet-4")
-    execution_agent_model: str = Field(default="anthropic/claude-sonnet-4")
-    execution_agent_search_model: str = Field(default="anthropic/claude-sonnet-4")
-    summarizer_model: str = Field(default="anthropic/claude-sonnet-4")
-    email_classifier_model: str = Field(default="anthropic/claude-sonnet-4")
+    # LLM model selection: OPENPOKE_MODEL sets every role, the per-role vars override it
+    interaction_agent_model: str = Field(default=os.getenv("OPENPOKE_INTERACTION_MODEL", DEFAULT_MODEL))
+    execution_agent_model: str = Field(default=os.getenv("OPENPOKE_EXECUTION_MODEL", DEFAULT_MODEL))
+    execution_agent_search_model: str = Field(default=os.getenv("OPENPOKE_SEARCH_MODEL", DEFAULT_MODEL))
+    summarizer_model: str = Field(default=os.getenv("OPENPOKE_SUMMARIZER_MODEL", DEFAULT_MODEL))
+    email_classifier_model: str = Field(default=os.getenv("OPENPOKE_CLASSIFIER_MODEL", DEFAULT_MODEL))
+
+    # Routing: how the orchestrator finds and chooses an agent. The defaults are the version
+    # that did best in the evals; lookup=none with prompt=v1 is the original behaviour.
+    #   lookup   none = every agent's name in the prompt (the original)
+    #            records = a handful of candidates found by searching agents' work records
+    #   decider  who decides whether to route, create or ask:
+    #            orchestrator | told_to_ask | code_rule | judge
+    #   prompt   v1 = the original orchestrator prompt, v2 = the rewrite
+    #   ask      how readily to ask when one candidate fits and another might: strict | balanced | loose
+    routing_lookup: str = Field(default=os.getenv("OPENPOKE_LOOKUP", "records"))
+    routing_decider: str = Field(default=os.getenv("OPENPOKE_DECIDER", "orchestrator"))
+    routing_prompt: str = Field(default=os.getenv("OPENPOKE_PROMPT", "v2"))
+    # What is kept about each agent: full = the work record (people by address, threads,
+    # searches, kept from its tool calls) and the contacts table; description = a title and
+    # one line of description, nothing else.
+    routing_record: str = Field(default=os.getenv("OPENPOKE_RECORD", "full"))
+    # Tell the orchestrator how each candidate was found, so it can discount one that only
+    # shares a topic with the message.
+    routing_explain: bool = Field(default=os.getenv("OPENPOKE_EXPLAIN_CANDIDATES", "0") == "1")
+    routing_ask: str = Field(default=os.getenv("OPENPOKE_ASK", "balanced"))
+    routing_ask_margin: float = Field(default=_env_float("OPENPOKE_ASK_MARGIN", 0.25))
+    judge_model: str = Field(default=os.getenv("OPENPOKE_JUDGE_MODEL", DEFAULT_MODEL))
 
     # Credentials / integrations
     openrouter_api_key: Optional[str] = Field(default=os.getenv("OPENROUTER_API_KEY"))

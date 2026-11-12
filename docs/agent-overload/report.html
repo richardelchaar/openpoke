@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Addressing Agent Overload in OpenPoke: Technical Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<style>
+:root {
+  --paper: #FAF8F3; --surface: #FFFFFF; --ink: #1F2328; --muted: #5E6570; --rule: #E3DED3; --tint: #F2EEE5;
+  --accent: #2F4B66; --good: #3E7B5E; --warn: #B7791F; --bad: #A8443A; --dup: #6B5B95; --other: #9A9DA3;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --sans: "Source Sans 3", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #16181B; --surface: #1E2125; --ink: #E8E6E1; --muted: #A2A8B0; --rule: #34383E; --tint: #23262B;
+  --accent: #9DB8D3; --good: #6FB08F; --warn: #D9A54A; --bad: #D9776C; --dup: #A99AD0; --other: #7C8188; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #16181B; --surface: #1E2125; --ink: #E8E6E1; --muted: #A2A8B0; --rule: #34383E; --tint: #23262B;
+  --accent: #9DB8D3; --good: #6FB08F; --warn: #D9A54A; --bad: #D9776C; --dup: #A99AD0; --other: #7C8188; color-scheme: dark }
+
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.6; }
+.page { display: grid; grid-template-columns: 235px minmax(0, 760px); gap: 56px; justify-content: center;
+  padding-block: 48px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { min-width: 0; display: flex; flex-direction: column; gap: 52px; }
+section { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 24px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.22; }
+h1 { font-size: 38px; letter-spacing: -0.01em; }
+h2 { font-size: 26px; padding-top: 28px; border-top: 1px solid var(--rule); }
+h3 { font-size: 19.5px; margin-top: 8px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 22px; display: flex; flex-direction: column; gap: 7px; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--tint); padding: 1px 5px; border-radius: 3px; }
+pre { font-family: var(--mono); font-size: 13.5px; line-height: 1.55; background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 14px 16px; margin: 0; overflow-x: auto; }
+strong { font-weight: 600; }
+.lede { font-size: 19px; line-height: 1.52; color: var(--ink); max-width: 66ch; }
+.meta { font-size: 14.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.note { font-size: 14.5px; color: var(--muted); }
+
+/* contents */
+nav { position: sticky; top: 24px; align-self: start; font-size: 14.5px; }
+nav ol { list-style: none; padding: 0; gap: 2px; border-left: 1px solid var(--rule); }
+nav a { display: block; padding: 5px 0 5px 14px; color: var(--muted); text-decoration: none; margin-left: -1px; border-left: 2px solid transparent; }
+nav a:hover { color: var(--ink); border-left-color: var(--accent); }
+nav .eyebrow { margin-bottom: 12px; display: block; }
+details.toc { display: none; }
+details.fold { border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); padding: 12px 16px; }
+details.fold summary { font-weight: 600; cursor: pointer; font-size: 15.5px; }
+details.fold .scroll { margin-top: 12px; }
+
+/* approach box */
+.approach { border: 1px solid var(--rule); border-left: 3px solid var(--accent); border-radius: 4px; background: var(--surface); padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.approach h3 { font-family: var(--sans); font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.approach ol { gap: 6px; font-size: 15.5px; }
+
+/* headline figures */
+.figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+.figures > div { padding: 15px 17px; border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 4px; }
+.figures > div:first-child { border-left: 0; }
+.figures .label { font-size: 13.5px; color: var(--muted); line-height: 1.35; }
+.figures .value { font-family: var(--serif); font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.figures .from { font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* tables */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 11px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--ink); white-space: nowrap; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.pick td { font-weight: 600; background: var(--tint); }
+td.miss { color: var(--bad); font-weight: 600; }
+td.met { color: var(--good); font-weight: 600; }
+
+/* figures */
+figure { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+figcaption { font-size: 14px; color: var(--muted); }
+figure h4 { margin: 0; font-family: var(--sans); font-size: 15.5px; font-weight: 600; }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--sans); fill: var(--muted); font-size: 12px; }
+svg .ink { fill: var(--ink); }
+
+/* stacked outcome bars */
+.bars { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 14px; align-items: center; font-size: 14.5px; }
+.bar { display: flex; height: 32px; border-radius: 2px; overflow: hidden; }
+.bar span { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 600; min-width: 0; }
+.s-right { background: var(--good); } .s-missed { background: var(--bad); } .s-need { background: var(--warn); }
+.s-dup { background: var(--dup); } .s-other { background: var(--other); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* change bars in the category table */
+.delta { display: grid; grid-template-columns: 1fr 1fr; width: 140px; height: 14px; }
+.delta span { height: 14px; }
+.delta .neg { justify-self: end; background: var(--warn); border-radius: 2px 0 0 2px; }
+.delta .pos { justify-self: start; background: var(--good); border-radius: 0 2px 2px 0; }
+.delta .axis { border-left: 1px solid var(--muted); }
+
+/* flow diagrams */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; font-size: 14.5px; }
+.flow .box { border: 1px solid var(--rule); background: var(--tint); border-radius: 4px; padding: 10px 12px; flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.flow .box b { font-weight: 600; }
+.flow .box small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.flow .box.key { border-color: var(--accent); background: var(--surface); }
+.flow .arrow { align-self: center; color: var(--muted); font-size: 18px; flex: 0 0 auto; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.callout { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; color: var(--ink); }
+
+.num { font-family: var(--sans); font-size: 12px; font-weight: 700; color: var(--surface); background: var(--accent); border-radius: 3px; padding: 1px 6px; display: inline-block; font-variant-numeric: tabular-nums; margin-right: 4px; }
+a.cref { text-decoration: none; white-space: nowrap; }
+a.cref:hover { text-decoration: underline; }
+.hbars { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px 12px; align-items: center; font-size: 14.5px; }
+.hbars .track { background: var(--tint); height: 18px; border-radius: 2px; }
+.hbars .fill { background: var(--other); height: 18px; border-radius: 2px; }
+.hbars .fill.pick { background: var(--accent); }
+.hbars .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+@media (max-width: 900px) {
+  .page { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 28px 64px; }
+  nav { display: none; }
+  details.toc { display: block; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); padding: 10px 14px; font-size: 15px; }
+  details.toc summary { font-weight: 600; cursor: pointer; }
+  details.toc ol { margin-top: 10px; }
+  h1 { font-size: 30px; } h2 { font-size: 23px; } body { font-size: 16px; } .lede { font-size: 17.5px; }
+  .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figures > div:nth-child(3) { border-left: 0; } .figures > div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .flow .arrow { display: none; }
+}
+</style>
+<style>html { color-scheme: light dark; } body { margin: 0; } img { max-width: 100%; }</style>
+</head>
+<body>
+<div class="page">
+<nav aria-label="Contents">
+  <span class="eyebrow">Contents</span>
+  <ol>
+    <li><a href="#summary">Executive Summary</a></li>
+    <li><a href="#problem">1. Problem Definition</a></li>
+    <li><a href="#dataset">2. Evaluation Benchmark</a></li>
+    <li><a href="#original">3. Baseline Diagnosis</a></li>
+    <li><a href="#built">4. Architecture &amp; Ablations</a></li>
+    <li><a href="#results">5. Ablation Results</a></li>
+    <li><a href="#chosen">6. Held-Out &amp; Stress Results</a></li>
+    <li><a href="#gaps">7. Other Codebase Fixes</a></li>
+    <li><a href="#limits">8. Limitations</a></li>
+    <li><a href="#next">9. Next Steps</a></li>
+    <li><a href="#reproduce">10. Reproducibility</a></li>
+  </ol>
+</nav>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="eyebrow">Technical Engineering Report</span>
+  <h1>Addressing Agent Overload in OpenPoke</h1>
+  <p class="lede">OpenPoke routes every user request through a single orchestrator that sees only a flat list of bare agent names and is prompted never to ask clarifying questions. This report presents a deterministic routing benchmark, a seven-variant controlled ablation, and a SQLite work-record retrieval architecture that raises held-out routing accuracy from 78% to 92% while cutting prompt tokens by 73% at 640 agents.</p>
+  <div class="meta"><span>Richard El-Chaar</span><span>November 2026</span><span>Branch <code>fix/agent-overload</code></span><span>Model: <code>anthropic/claude-haiku-5.5</code></span></div>
+  <details class="toc"><summary>Contents</summary>
+    <ol>
+      <li><a href="#summary">Executive Summary</a></li>
+      <li><a href="#problem">1. Problem Definition</a></li>
+      <li><a href="#dataset">2. Evaluation Benchmark</a></li>
+      <li><a href="#original">3. Baseline Diagnosis</a></li>
+      <li><a href="#built">4. Architecture &amp; Ablations</a></li>
+      <li><a href="#results">5. Ablation Results</a></li>
+      <li><a href="#chosen">6. Held-Out &amp; Stress Results</a></li>
+      <li><a href="#gaps">7. Other Codebase Fixes</a></li>
+      <li><a href="#limits">8. Limitations</a></li>
+      <li><a href="#next">9. Next Steps</a></li>
+      <li><a href="#reproduce">10. Reproducibility</a></li>
+    </ol>
+  </details>
+</header>
+
+<section id="summary">
+  <h2>Executive Summary</h2>
+
+  <div class="approach">
+    <h3>Approach</h3>
+    <ol>
+      <li><strong>Benchmark before code:</strong> Built and froze (<code>cases-frozen</code>) a deterministic synthetic benchmark of multi-contact email worlds (448 dev cases, 158 held-out cases, and a 40-case noisy stress set) graded by deterministic rules across two-turn clarification loops, with zero LLM-as-judge calls.</li>
+      <li><strong>Controlled ablation:</strong> Implemented seven incremental configurations (<code>v0</code>–<code>v5</code>, <code>v2d</code>) behind environment flags in the shared runtime to isolate prompt rules, candidate shortlisting, structured state, deterministic keyword gates, and a pre-routing LLM classifier.</li>
+      <li><strong>Chosen architecture (<code>v2</code>, Work-Record Shortlist):</strong> Each execution agent maintains a SQLite work record populated deterministically from its tool-call arguments (participant emails, Gmail <code>thread_id</code>s and subjects, reminders, and search queries) alongside a contacts table. Before each orchestrator turn, a zero-LLM lookup combines recent handoffs, contact matches, last-shown turn context, and SQLite FTS5 (<code>BM25</code>) search to surface at most 10 candidate agents plus matching contacts, constraining dispatch to explicit <code>agent_id</code>s and a duplicate-checked <code>create_agent</code> tool.</li>
+    </ol>
+  </div>
+
+  <div class="figures">
+    <div><span class="label">Overall routing accuracy</span><span class="value">92%</span><span class="from">up from 78% baseline</span></div>
+    <div><span class="label">Clarifies ambiguous requests</span><span class="value">97%</span><span class="from">up from 42% baseline</span></div>
+    <div><span class="label">Unnecessary clarifications</span><span class="value">7%</span><span class="from">up from 0–2% baseline</span></div>
+    <div><span class="label">Prompt tokens (640 agents)</span><span class="value">10,700</span><span class="from">down from 39,700 (−73%)</span></div>
+  </div>
+  <p class="note">Held-out world (158 cases, 143 scored), single untuned run at 160 agents unless noted. Total OpenRouter spend across all experiments: ~$30.</p>
+
+  <ul>
+    <li><strong>Silent guessing is the baseline's dominant error.</strong> When a message could reasonably refer to more than one thread or person (such as <em>"nudge Tessa"</em> when Tessa has two open threads, or <em>"send Omar my number"</em> when two Omars are in the user's contacts), the baseline asks a clarifying question only 33–47% of the time. On the remaining runs it either picks one agent at random or messages every matching agent at once.</li>
+    <li><strong>Structured tool-call records outperform one-line summaries by 11 points on dev.</strong> Shortlisting candidates over a one-line text summary per agent (<code>v2d</code>) reaches 86% accuracy, whereas indexing structured records from execution tool calls alongside a contacts table (<code>v2</code>) reaches 97%. That gap comes from surfacing contacts who do not have an agent yet, tracking CC'd intermediaries such as insurance adjusters, and preventing duplicate agents for ongoing threads.</li>
+    <li><strong>Catching real ambiguity trades off against mild over-caution on clear messages.</strong> On the held-out benchmark, accuracy on genuinely ambiguous categories rises from 0–58% to 80–100%, while clear requests see a 7% unnecessary-question rate. Unnecessary questions are graded strictly as failures so an "always ask" strategy cannot game the metric.</li>
+    <li><strong>Longer agent lists inflate token cost; multiple threads per contact break accuracy.</strong> Scaling the roster from 10 to 1,280 agents by adding unrelated background contacts leaves Claude Haiku 5.5's accuracy flat at 73–80% while multiplying prompt tokens nearly sixfold. By contrast, keeping the roster at 160 agents while piling multiple unrelated threads and shared first names onto the active contacts (<code>--heavy</code>) causes baseline duplicates to more than double (3.2% → 7.4%) and drops follow-up accuracy after a user's clarification from 83% to 59%.</li>
+    <li><strong>External decision gates underperformed a well-informed orchestrator.</strong> Once the orchestrator could see structured candidate records and matching contacts (<code>v2</code>), adding a strict prompt rule (<code>v3</code>), a Python keyword-margin gate (<code>v4</code>), or a separate pre-routing LLM classifier (<code>v5</code>) either drove up false clarifications or added an extra round-trip without improving overall accuracy.</li>
+  </ul>
+</section>
+
+<section id="problem">
+  <h2>1. Problem Definition</h2>
+  <p>OpenPoke divides work between two layers: a single <strong>interaction agent</strong> (the orchestrator) that converses with the user, and persistent <strong>execution agents</strong> that hold Gmail and reminder tools for individual workstreams. Over weeks of real inbox usage, a user accumulates hundreds of execution agents across recurring clients, vendors, and personal threads.</p>
+  <figure>
+    <h4>Upstream Routing Flow (<code>v0</code>)</h4>
+    <div class="flow">
+      <div class="box"><b>User message</b><small>"nudge Tessa, it's been a week"</small></div>
+      <span class="arrow">→</span>
+      <div class="box key"><b>Orchestrator</b><small>sees every agent's bare display name in <code>&lt;active_agents&gt;</code>, with zero email, thread, or contact metadata</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>send_message_to_agent(name)</b><small>exact string match reuses the agent; any spelling variation silently spawns a new one</small></div>
+    </div>
+    <figcaption>Upstream prompt rules compound this thin representation by instructing the orchestrator to "always assume you are capable," "never ask," and "always prefer a relevant existing agent."</figcaption>
+  </figure>
+  <p>As an inbox history grows, these three choices reinforce one another. Bare agent names hide whether two threads exist for Tessa or whether a second Omar sits in the user's contacts without an agent yet, and the prompt forbids asking even when the orchestrator notices a collision. Addressing agent overload therefore requires getting three decisions right as state scales: <strong>routing to the right existing agent, creating a new agent only for genuinely new work, and asking one concise question when a message has multiple plausible targets.</strong></p>
+</section>
+
+<section id="dataset">
+  <h2>2. Evaluation Benchmark</h2>
+  <p>Upstream OpenPoke shipped with no tests and no evaluation suite. Before modifying any routing code, I built a deterministic synthetic benchmark generator with exact ground truth and froze the resulting datasets in Git (<code>cases-frozen</code>, verified via SHA-256 hashes in <code>evals/CHECKSUMS</code>).</p>
+
+  <h3>World &amp; Ground-Truth Generation</h3>
+  <p>To test routing across small and large rosters without changing the underlying test questions, each benchmark world separates <strong>core contacts</strong> from <strong>background filler</strong>:</p>
+  <ol>
+    <li><strong>Seeded world state:</strong> A fixed random seed generates roughly 1,040 contacts and 1,380 execution agents spanning 40 realistic email workflows (insurance claims, policy renewals, invoices, home repairs, travel, and scheduling). Roughly <strong>83 core agents</strong> form six controlled ambiguity traps. The remaining <strong>~1,300 background agents</strong> belong to contacts whose first and last names never overlap with anyone in the core traps. Truncating or expanding that background pool lets the harness test the exact same prompt at <strong>20, 160, or 640 agents</strong> without ever changing its ground-truth answer.</li>
+    <li><strong>Deterministic case synthesis:</strong> Prompts are instantiated from templates directly against the generated world records rather than written or graded by an LLM. Because Tessa Saldanha is constructed with both a radiator repair agent and a baby-shower gift agent, <em>"nudge Tessa Saldanha, it's been a week"</em> deterministically requires a clarifying question naming both tasks, whereas <em>"ask Tessa about the radiator"</em> deterministically routes straight to the repair agent.</li>
+  </ol>
+
+  <h3>Structural Ambiguity Traps</h3>
+  <p>Roughly 83 core agents form six controlled ambiguity traps; the remaining ~1,300 filler agents never share names with core contacts, so scaling roster size never alters the ground-truth answer.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Structural Trap</th><th class="n">Core Count</th><th>What It Tests</th></tr></thead>
+    <tbody>
+      <tr><td>Shared first name, 1 agent each</td><td class="n">12 pairs</td><td>Routes when topic settles it; asks when only first name is given</td></tr>
+      <tr><td>Single contact, 2 active tasks</td><td class="n">12 people</td><td>Routes when topic is named; asks when request is vague</td></tr>
+      <tr><td>Rostered contact + unrostered namesake</td><td class="n">12 pairs</td><td>Detects that a second matching contact exists outside the agent roster</td></tr>
+      <tr><td>Unique contact, 1 active task</td><td class="n">18+ people</td><td>Plain routing without false-positive questions</td></tr>
+      <tr><td>Shared intermediary (CC'd adjuster)</td><td class="n">3 people</td><td>Routes to the specific client's claim rather than mixing threads</td></tr>
+      <tr><td>Broad inbox-scanner agent</td><td class="n">1 agent</td><td>Ignores a catch-all search agent that read many emails without acting</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>All 22 Test Categories (448 Development Cases)</h3>
+  <p>Each case pairs a user message with prior conversation history and a deterministic expected outcome. Roughly three-quarters of the <strong>406 scored cases</strong> have an unambiguous target action and one-quarter require clarification. Two diagnostic categories (<strong>42 cases</strong>) run for every configuration without affecting accuracy totals because upstream OpenPoke (contact-level reuse) and my design (task-level scoping) intentionally make opposite choices there.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Expected Action</th><th>Category</th><th>Example Prompt</th><th class="n">Cases</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="9">Route to existing agent</td><td>Clear follow-up</td><td>"ask Dalia Eriksen about the jewellery rider"</td><td class="n">22</td></tr>
+      <tr><td>Pronoun follow-up</td><td>"ok send that" (after a draft was shown)</td><td class="n">16</td></tr>
+      <tr><td>Follow-up after topic gap</td><td>"any update from Noor on the expense report?"</td><td class="n">15</td></tr>
+      <tr><td>Multi-task contact, topic named</td><td>"ask Fiona about the commercial policy audit"</td><td class="n">34</td></tr>
+      <tr><td>Shared first name, topic settles</td><td>"ask Felix about the missed premium payment"</td><td class="n">34</td></tr>
+      <tr><td>Paraphrased topic</td><td>"where are we with Vera on the coverage for the trip?"</td><td class="n">18</td></tr>
+      <tr><td>Shared intermediary (adjuster)</td><td>"ask Greta Rossi where Anton Greenwood's claim stands"</td><td class="n">12</td></tr>
+      <tr><td>Email alert follow-up</td><td>"reply to that and say I'll call this afternoon"</td><td class="n">12</td></tr>
+      <tr><td>User correction</td><td>"no, the other Bruno"</td><td class="n">14</td></tr>
+      <tr><td rowspan="2">Create new agent</td><td>Shared first name, full name is new contact</td><td>"email Omar Kaur …" (only Omar Ivanov has an agent)</td><td class="n">30</td></tr>
+      <tr><td>Brand-new contact</td><td>"email Xavier Appleton with feedback on the team page mockup"</td><td class="n">14</td></tr>
+      <tr><td rowspan="3">Ask clarifying question</td><td>Single contact, vague task</td><td>"nudge Tessa Saldanha, it's been a week" (2 tasks)</td><td class="n">34</td></tr>
+      <tr><td>Shared first name, no topic</td><td>"send Kofi a quick note that I'll call tomorrow" (2 Kofis)</td><td class="n">34</td></tr>
+      <tr><td>Rostered vs. unrostered contact</td><td>"invite Yara to the open house on the 20th"</td><td class="n">30</td></tr>
+      <tr><td>Direct reply</td><td>Chat or general question</td><td>"thanks!", "what's a deductible?"</td><td class="n">15</td></tr>
+      <tr><td rowspan="5">Robustness</td><td>Two tasks in one message</td><td>Both handoffs right, zero questions</td><td class="n">14</td></tr>
+      <tr><td>Topic switch</td><td>Chat about Contact A, then request for Contact B</td><td class="n">12</td></tr>
+      <tr><td>Inbox-scanner trap</td><td>"email Maria" ignores prior full-inbox search agent</td><td class="n">12</td></tr>
+      <tr><td>Informal text &amp; typos</td><td>"tell caleb i need the paperowrk back by friday"</td><td class="n">20</td></tr>
+      <tr><td>Post-clarification follow-up</td><td>Ambiguity already answered earlier; must not re-ask</td><td class="n">14</td></tr>
+      <tr><td rowspan="2">Diagnostic (unscored)</td><td>Same contact, new topic</td><td>"email Leila Sorensen that the final installment did not go through"</td><td class="n">30</td></tr>
+      <tr><td>One-off lookup</td><td>"find the wifi password someone sent me last year"</td><td class="n">12</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>End-to-End Case Walkthrough</h3>
+  <figure>
+    <h4>Two-Turn Clarification Test: "nudge Tessa Saldanha, it's been a week"</h4>
+    <div class="flow">
+      <div class="box"><b>World state</b><small>Tessa has 2 active agents: radiator repair &amp; baby-shower gift</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>Expected Turn 1</b><small>Ask which task; dispatch zero agents</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>Rule check</b><small>0 handoffs, <code>?</code> present, names "repair"/"radiator" and "gift"/"shower"</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>Scripted Turn 2</b><small>"the rental repair" → repair agent · "neither, tax return" → create · "the usual one" → may re-ask</small></div>
+    </div>
+    <figcaption>Every ambiguous case carries up to three scripted user replies, testing Turn-2 resolution alongside Turn-1 detection.</figcaption>
+  </figure>
+
+  <h3>Execution &amp; Rule-Based Grading</h3>
+  <ul>
+    <li><strong>Real orchestrator, stubbed Gmail boundary:</strong> Every case executes through <code>InteractionAgentRuntime</code> in an isolated subprocess at roster sizes of <strong>20, 160, and 640 agents</strong>, recording handoffs without running execution agents.</li>
+    <li><strong>Deterministic grading &amp; error taxonomy:</strong> Grading uses code rules with zero LLM-as-judge calls. Every failure is classified into an explicit error type (<code>wrong_person</code>, <code>wrong_agent</code>, <code>duplicate</code>, <code>missed_ask</code>, <code>unnecessary_ask</code>, <code>bad_question</code>).</li>
+    <li><strong>Strict false-ask penalty:</strong> Asking when the message is already clear counts as wrong; because ~75% of scored cases have a direct answer, a naive "always ask" policy scores just <strong>30%</strong>.</li>
+  </ul>
+
+  <h3>Evaluation Hygiene</h3>
+  <ul>
+    <li><strong>Frozen before implementation:</strong> Datasets and world seeds were checksummed (<code>evals/CHECKSUMS</code>), validated against world state, and tagged <code>cases-frozen</code> before writing routing changes.</li>
+    <li><strong>Pre-registered pass bars:</strong> Target thresholds were committed immediately after measuring <code>v0</code> and before running modified variants.</li>
+    <li><strong>Reserved held-out world:</strong> A second world (158 cases, 143 scored, distinct contacts and category mix) was held back and evaluated once after locking the final design.</li>
+    <li><strong>Measured run-to-run variance:</strong> Three full repeats of <code>v0</code> varied by 1.2 percentage points overall, so differences under <strong>2 points</strong> are treated as ties.</li>
+  </ul>
+</section>
+
+<section id="original">
+  <h2>3. Baseline Diagnosis (<code>v0</code>)</h2>
+  <h3>First Surprise: Roster Length Alone Inflates Cost, Not Errors</h3>
+  <p>Based on the OpenPoke problem statement, my starting hypothesis was that injecting hundreds of agent names into <code>&lt;active_agents&gt;</code> would overwhelm the orchestrator's context and steadily degrade routing accuracy. To find where that cliff occurred, I ran an initial 64-case slice across eight roster sizes from 10 to 1,280 agents prior to freezing the full suite:</p>
+  <figure>
+    <h4>Baseline Accuracy Across Roster Sizes (10 to 1,280 Agents)</h4>
+    <svg viewBox="0 0 640 230" role="img" aria-label="Baseline accuracy stays flat between 73 and 80 percent from 10 to 1,280 agents">
+      <g stroke="var(--rule)"><line x1="56" x2="620" y1="30" y2="30"/><line x1="56" x2="620" y1="75" y2="75"/><line x1="56" x2="620" y1="120" y2="120"/><line x1="56" x2="620" y1="165" y2="165"/></g>
+      <g text-anchor="end"><text x="48" y="34">100%</text><text x="48" y="79">75%</text><text x="48" y="124">50%</text><text x="48" y="169">25%</text></g>
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="80,78.6 153,78.6 226,69.6 299,66 372,75 445,71.4 518,71.4 591,67.8"/>
+      <g fill="var(--accent)"><circle cx="80" cy="78.6" r="4"/><circle cx="153" cy="78.6" r="4"/><circle cx="226" cy="69.6" r="4"/><circle cx="299" cy="66" r="4"/><circle cx="372" cy="75" r="4"/><circle cx="445" cy="71.4" r="4"/><circle cx="518" cy="71.4" r="4"/><circle cx="591" cy="67.8" r="4"/></g>
+      <g text-anchor="middle" class="ink"><text x="80" y="64" class="ink">73%</text><text x="153" y="64" class="ink">73%</text><text x="226" y="56" class="ink">78%</text><text x="299" y="52" class="ink">80%</text><text x="372" y="61" class="ink">75%</text><text x="445" y="57" class="ink">77%</text><text x="518" y="57" class="ink">77%</text><text x="591" y="54" class="ink">79%</text></g>
+      <g text-anchor="middle"><text x="80" y="192">10</text><text x="153" y="192">20</text><text x="226" y="192">40</text><text x="299" y="192">80</text><text x="372" y="192">160</text><text x="445" y="192">320</text><text x="518" y="192">640</text><text x="591" y="192">1,280</text><text x="335" y="216">agents in the roster</text></g>
+    </svg>
+    <figcaption>Exploratory 64-case pre-freeze sweep. Prompt tokens climb from 11,900 at 10 agents to 69,500 at 1,280 agents while retrieval accuracy stays within 73–80%.</figcaption>
+  </figure>
+  <p>Accuracy did not budge, while input consumption climbed nearly sixfold from 11,900 to 69,500 tokens per message. The reason comes down to <em>what</em> was being added: scaling the roster from 10 to 1,280 padded the prompt with background agents belonging to unrelated people whose names never appeared in the test prompts. For a capable model like <code>anthropic/claude-haiku-5.5</code>, scanning past 1,200 irrelevant names is effortless; the two or three confusing candidates for any given prompt were identical at 10 agents and at 1,280.</p>
+  <p class="callout"><strong>Note on model capability:</strong> Flat accuracy across long lists of unrelated names reflects Claude Haiku 5.5's strong retrieval over mid-length contexts (up to ~70k tokens here). Smaller, cheaper, or older models are much more prone to losing recall in the middle of long lists, meaning raw roster length can hurt both cost and accuracy on weaker models.</p>
+
+  <h3>Four Failure Modes on the Full Baseline (448 Cases × 3 Sizes × 3 Repeats)</h3>
+  <p>Running the frozen 448-case benchmark across 20, 160, and 640 agents (three full repeats per size, 1,218 scored runs per size) showed where <code>v0</code> actually breaks:</p>
+  <ul>
+    <li><strong>Silent guessing on ambiguous prompts:</strong> Roughly 200 of the 1,218 scored runs at each size required a clarifying question that <code>v0</code> failed to ask. About three-quarters of the time it picked one agent arbitrarily; the other quarter of the time it messaged every matching agent simultaneously.</li>
+    <li><strong>Total blindness to unrostered contacts (0 / 270):</strong> When one Omar already has an active agent and a second Omar exists only in the user's address book, <em>"send Omar my new phone number"</em> should prompt a question. Because <code>&lt;active_agents&gt;</code> lists only existing agents, <code>v0</code> has no way of knowing the second Omar exists and routed to the wrong Omar in nearly every run.</li>
+    <li><strong>Duplicate creation creep at scale:</strong> Even though headline accuracy looked flat, duplicate agent creation more than doubled with roster length, rising from <strong>1.5%</strong> at 20 agents to <strong>3.9%</strong> at 640 agents as exact-string name recall slipped.</li>
+    <li><strong>Decay on indirect relationships:</strong> When a user referenced an intermediary rather than the primary client (<em>"ask the adjuster where Anton's claim stands"</em>, where Greta Rossi is CC'd on three clients' claims), accuracy fell from <strong>92%</strong> at 20 agents to <strong>39%</strong> at 640 agents because bare agent titles rarely record every participant on a thread.</li>
+  </ul>
+
+  <h3>Realistic Growth: Per-Contact Crowding (<code>--crowd</code> and <code>--heavy</code>)</h3>
+  <p>In real usage, six months of email history does not merely add strangers to the roster; recurring contacts accumulate multiple separate workstreams, and larger address books produce more first-name collisions. To measure that realistic form of growth without altering the 448 test prompts or their expected answers, I constructed two denser 160-agent rosters around the core contacts in each case:</p>
+  <ul>
+    <li><strong>Namesake crowding (<code>--crowd 10</code>):</strong> Adds 10 extra contacts who share each first name mentioned in a case (for instance, 12 people named Felix in the roster instead of 2). That change alone lowered <code>v0</code> routing accuracy by roughly <strong>3 percentage points</strong>.</li>
+    <li><strong>Heavy per-contact crowding (<code>--heavy</code>, the crowded roster):</strong> Keeps the total roster fixed at 160 agents, but gives every core contact in the case <strong>6 additional unrelated tasks</strong> on top of <strong>10 first-name collisions</strong>, so a single contact can hold up to 8 active agents while 11 people share their first name.</li>
+  </ul>
+  <p>Under <code>--heavy</code> crowding, the baseline degrades sharply on multi-task disambiguation and follow-up routing:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Baseline (<code>v0</code>) at 160 Agents</th><th class="n">Standard Roster</th><th class="n">Crowded Roster (<code>--heavy</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Duplicate agent rate</td><td class="n">3.2%</td><td class="n">7.4%</td></tr>
+      <tr><td>Turn-2 accuracy after user answers</td><td class="n">83%</td><td class="n">59%</td></tr>
+      <tr><td>Clarifies when ambiguous</td><td class="n">35%</td><td class="n">83%</td></tr>
+    </tbody>
+  </table></div>
+  <p>Duplicate creation more than doubles (3.2% → 7.4%) and Turn-2 accuracy after the user answers a clarifying question drops by 24 points (83% → 59%) because bare agent titles cannot distinguish eight workstreams for the same person. Interestingly, Turn-1 clarification jumps from 35% to 83%: seeing eight agents prefixed with Tessa's name makes the collision obvious enough to override the prompt's bias against asking, even though <code>v0</code> then fails to route the user's reply on Turn 2. <strong>List length is a cost problem; per-contact task density is an accuracy problem.</strong></p>
+</section>
+
+<section id="built">
+  <h2>4. Architecture &amp; Ablation Design</h2>
+  <p>The baseline diagnosis pointed to three distinct questions that a clean experiment needed to separate:</p>
+  <ol>
+    <li><strong>Prompting alone:</strong> How much of <code>v0</code>'s failure comes purely from the upstream prompt forbidding questions?</li>
+    <li><strong>Shortlisting vs. structured state:</strong> Once we shortlist candidates to cap prompt tokens, is a one-line summary per agent sufficient, or does the orchestrator need structured records of participants, email subjects, and address-book contacts?</li>
+    <li><strong>Model judgment vs. code enforcement:</strong> Given structured state, can the orchestrator decide when to ask on its own, or does reliability improve when a strict prompt rule, a deterministic score margin, or a separate classifier forces the decision?</li>
+  </ol>
+  <p>To answer each question without changing two variables at once, I implemented <strong>seven configurations</strong> behind environment switches in <code>server/config.py</code> sharing the exact same runtime:</p>
+
+  <div class="scroll"><table>
+    <thead><tr><th>Configuration</th><th>Flag</th><th>Prompt Context</th><th>Agent Metadata</th><th>Who Decides to Ask</th><th class="n">Extra Calls</th></tr></thead>
+    <tbody>
+      <tr id="c0"><td><span class="num">0</span> <strong>Baseline</strong></td><td><code>v0</code></td><td>All agent names</td><td>Name only</td><td>Original prompt (<em>never ask</em>)</td><td class="n">0</td></tr>
+      <tr id="c1"><td><span class="num">1</span> <strong>Prompt Rewrite</strong></td><td><code>v1</code></td><td>All agent names</td><td>Name only</td><td>Rewritten prompt (<em>may ask</em>)</td><td class="n">0</td></tr>
+      <tr id="c2"><td><span class="num">2</span> <strong>Description Shortlist</strong></td><td><code>v2d</code></td><td>Top ≤10 candidates</td><td>Title + 1-line summary</td><td>Orchestrator</td><td class="n">0</td></tr>
+      <tr id="c3" class="pick"><td><span class="num">3</span> <strong>Work-Record Shortlist</strong></td><td><code>v2</code></td><td>Top ≤10 + contacts</td><td>Tool-call records + contacts</td><td>Orchestrator</td><td class="n">0</td></tr>
+      <tr id="c4"><td><span class="num">4</span> <strong>Strict Ask Prompt</strong></td><td><code>v3</code></td><td>Top ≤10 + contacts</td><td>Tool-call records + contacts</td><td>Hard <code>IMPORTANT</code> prompt rule</td><td class="n">0</td></tr>
+      <tr id="c5"><td><span class="num">5</span> <strong>Keyword Gate</strong></td><td><code>v4</code></td><td>Top ≤10 + contacts</td><td>Tool-call records + contacts</td><td>Python BM25 margin gate (tool-enforced)</td><td class="n">0</td></tr>
+      <tr id="c6"><td><span class="num">6</span> <strong>Pre-Routing LLM Judge</strong></td><td><code>v5</code></td><td>Top ≤10 + contacts</td><td>Tool-call records + contacts</td><td>Temp-0 LLM labeler + Python counter</td><td class="n">+1</td></tr>
+    </tbody>
+  </table></div>
+
+  <ul>
+    <li><strong><code>v1</code> (Prompt Rewrite):</strong> Keeps <code>v0</code>'s flat <code>&lt;active_agents&gt;</code> name list and tool schema, changing only four prompt rules: permits one brief question when genuinely ambiguous, scopes agent reuse to continuing the same task rather than everything involving the same person, allows direct conversational replies, and removes a reference to a nonexistent <code>reacttomessage</code> tool.</li>
+    <li><strong><code>v2d</code> (Description Shortlist):</strong> Tests standard text-summary retrieval. Each agent stores a title and a one-line task description; a zero-LLM lookup injects at most 10 candidates (recent handoffs plus keyword matches), replaces name matching with <code>send_message_to_agent(agent_id)</code>, and splits new-task creation into <code>create_agent</code>. There is no contacts table or structured participant extraction.</li>
+    <li><strong><code>v2</code> (Work-Record Shortlist, Chosen):</strong> Replaces plain text descriptions with structured SQLite work records populated from execution tool calls plus a <code>&lt;matched_contacts&gt;</code> block surfacing address-book matches alongside active candidates.</li>
+    <li><strong><code>v3</code> (Strict Ask Prompt):</strong> Identical to <code>v2</code>, plus an explicit <code>IMPORTANT</code> instruction forbidding dispatch whenever more than one candidate agent or matched contact could plausibly fit.</li>
+    <li><strong><code>v4</code> (Keyword Gate):</strong> Moves the ask decision out of the prompt into deterministic Python (<code>server/routing/decide.py</code>). Matched contacts are grouped by name, and if multiple candidates remain or the top candidate's keyword score fails to beat the runner-up by a configurable margin (<code>OPENPOKE_ASK_MARGIN=0.25</code>), Python strips the handoff and creation tools from that turn's schema so the orchestrator <em>must</em> ask.</li>
+    <li><strong><code>v5</code> (Pre-Routing LLM Judge):</strong> Tests my original pre-implementation favorite. Before the orchestrator runs, a separate temperature-0 LLM tool call labels every shortlisted candidate for each task in the user's message (<em>exact</em>, <em>plausible</em>, <em>same_person_other_work</em>, or <em>unrelated</em>). Deterministic Python counts the labels (1 <em>exact</em> → route; 0 <em>exact</em> and ≥2 <em>plausible</em> → ask; all <em>unrelated</em> with one contact → create) and restricts the orchestrator's tool schema to that outcome, falling back to <code>v2</code> if the classifier returns malformed output twice.</li>
+  </ul>
+
+  <h3 id="parts">Chosen Architecture (<code>v2</code>) in Detail</h3>
+  <p>On every user message, <code>v2</code> runs a deterministic lookup before invoking the orchestrator with a constrained tool schema:</p>
+  <figure>
+    <h4>Request Routing Pipeline (<code>v2</code>)</h4>
+    <div class="flow">
+      <div class="box"><b>User message</b></div>
+      <span class="arrow">→</span>
+      <div class="box key"><b>SQLite Lookup</b><small>Zero LLM calls. Combines recency, contact match, last-shown context, and FTS5 BM25.</small></div>
+      <span class="arrow">→</span>
+      <div class="box key"><b>Orchestrator</b><small>Sees ≤10 candidate records (emails, threads, summary) + matched contacts.</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>Constrained Tools</b><small><code>agent_id</code> enum handoff · duplicate-checked <code>create_agent</code> · direct ask</small></div>
+    </div>
+    <figcaption><code>send_message_to_agent</code> restricts <code>agent_id</code> via JSON Schema <code>enum</code> to shortlisted IDs; <code>create_agent</code> blocks creation if &gt;50% of title words overlap an existing task for the same person unless <code>allow_duplicate=true</code>.</figcaption>
+  </figure>
+
+  <div class="scroll"><table>
+    <thead><tr><th>Work-Record Component</th><th>Design Choice</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Fact extraction</td><td>Copied deterministically from tool-call arguments (<code>records.py</code>)</td><td>Zero LLM cost or latency; captures exact recipient/CC email addresses, subjects, and Gmail <code>thread_id</code>s</td></tr>
+      <tr><td>Pollution guard</td><td>Indexes drafts, replies, forwards, and reminders; search tools log only the query string</td><td>Prevents a broad inbox search from associating an agent with every contact in the user's mailbox</td></tr>
+      <tr><td>Identity key</td><td>Normalized lowercase email address</td><td>Cleanly separates contacts who share first or full names</td></tr>
+      <tr><td>Store &amp; index</td><td>Transactional SQLite + FTS5 (<code>porter unicode61</code> BM25) in <code>data/agents.db</code> (max 25 items/field)</td><td>Replaces upstream's lockless <code>roster.json</code> rewrite races with zero external service dependencies</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Relying on keyword search alone misses pronoun follow-ups, topic paraphrases, and replies to incoming email alerts. <code>lookup()</code> therefore unions four targeted sources before capping at 10 candidates:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Retrieval Source</th><th>What It Retrieves</th><th>Failure Mode Solved</th></tr></thead>
+    <tbody>
+      <tr><td>1. Recent</td><td>Last 3 dispatched agents from the conversation log</td><td>Pronoun follow-ups (<em>"ok send that"</em>) containing neither names nor topic keywords</td></tr>
+      <tr><td>2. People <span class="note">(Configs 3–6)</span></td><td>All agents linked to matched contacts/emails (full-name matches exclude first-name-only collisions)</td><td>Topic paraphrases (<em>"coverage for the trip"</em> vs. travel policy) when a person is named</td></tr>
+      <tr><td>3. Topic (BM25)</td><td>Top 5 FTS5 matches across title, summary, subjects, participants, and notes</td><td>Topic-only requests (<em>"did the plumbing quote come back?"</em>) where no person is named</td></tr>
+      <tr><td>4. Last shown</td><td>Agents linked to contacts named in the immediately preceding assistant or alert message when the prompt names nobody</td><td><em>"Reply to that"</em> after an email-watcher alert (<code>0/12</code> → <code>12/12</code> recall)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">An offline check (<code>python -m evals.offline lookup</code>) confirmed that across all 448 development cases and every roster size, this four-source lookup retrieves <strong>100% of required target agents</strong> at shortlist caps of 3, 5, 10, or 20, compared to 88% for BM25 keyword search on its own.</p>
+
+  <figure>
+    <h4>Surfacing Unrostered Contacts: "send Omar my new phone number"</h4>
+    <div class="two">
+      <div class="box" style="border:1px solid var(--rule);background:var(--tint);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:14.5px"><b>What Baseline (<code>v0</code>) sees</b><span>Bare agent names only:</span><code>Omar Ivanov jewellery rider</code><small style="color:var(--muted)">Unaware a second Omar exists in the address book, it messages Omar Ivanov (0/270 right).</small></div>
+      <div class="box" style="border:1px solid var(--accent);background:var(--surface);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:14.5px"><b>What Chosen (<code>v2</code>) sees</b><span>One candidate agent + two matched contacts:</span><code>Omar Ivanov (agents: ag_01)</code><code>Omar Kaur (no agent yet)</code><small style="color:var(--muted)">Seeing two valid recipients in <code>&lt;matched_contacts&gt;</code>, it asks which Omar the user means.</small></div>
+    </div>
+  </figure>
+</section>
+
+<section id="results">
+  <h2>5. Ablation Results (Development Set)</h2>
+  <p>Every configuration was evaluated on the frozen 406 scored development cases across 20, 160, and 640 agents, plus the 160-agent crowded roster (<code>--heavy</code>). In the table below, <strong>Clarifies Ambiguous</strong> measures recall on the ~25% of cases that genuinely require a question, <strong>Unnecessary Asks</strong> measures the false-ask rate on the ~75% of cases where the model should act immediately, and <strong>Turn-2 Accuracy</strong> measures how often the orchestrator routes or creates properly after a scripted user answer.</p>
+  <figure>
+    <h4>Overall Routing Accuracy at 160 Agents (406 Scored Cases)</h4>
+    <div class="hbars">
+      <span><a class="cref" href="#c0"><span class="num">0</span> Baseline (<code>v0</code>)</a></span><div class="track"><div class="fill" style="width:78%"></div></div><span class="val">78%</span>
+      <span><a class="cref" href="#c1"><span class="num">1</span> Prompt Rewrite (<code>v1</code>)</a></span><div class="track"><div class="fill" style="width:81%"></div></div><span class="val">81%</span>
+      <span><a class="cref" href="#c2"><span class="num">2</span> Description Shortlist (<code>v2d</code>)</a></span><div class="track"><div class="fill" style="width:86%"></div></div><span class="val">86%</span>
+      <span><a class="cref" href="#c3"><span class="num">3</span> Work-Record Shortlist (<code>v2</code>)</a></span><div class="track"><div class="fill pick" style="width:97%"></div></div><span class="val">97%</span>
+      <span><a class="cref" href="#c4"><span class="num">4</span> Strict Ask Prompt (<code>v3</code>)</a></span><div class="track"><div class="fill" style="width:94%"></div></div><span class="val">94%</span>
+      <span><a class="cref" href="#c5"><span class="num">5</span> Keyword Gate (<code>v4</code>)</a></span><div class="track"><div class="fill" style="width:90%"></div></div><span class="val">90%</span>
+      <span><a class="cref" href="#c6"><span class="num">6</span> Pre-Routing LLM Judge (<code>v5</code>)</a></span><div class="track"><div class="fill" style="width:93%"></div></div><span class="val">93%</span>
+    </div>
+  </figure>
+
+  <div class="scroll"><table>
+    <thead><tr><th>Configuration (160 Agents)</th><th class="n">Overall Accuracy</th><th class="n">Clarifies Ambiguous</th><th class="n">Unnecessary Asks</th><th class="n">Turn-2 Accuracy</th><th class="n">Duplicate Rate</th><th class="n">Prompt Tokens</th></tr></thead>
+    <tbody>
+      <tr><td><a class="cref" href="#c0"><span class="num">0</span> Baseline (<code>v0</code>)</a></td><td class="n">78%</td><td class="n">35%</td><td class="n">1%</td><td class="n">83%</td><td class="n">3.2%</td><td class="n">18,200</td></tr>
+      <tr><td><a class="cref" href="#c1"><span class="num">1</span> Prompt Rewrite (<code>v1</code>)</a></td><td class="n">81%</td><td class="n">67%</td><td class="n">3%</td><td class="n">80%</td><td class="n">7.4%</td><td class="n">15,600</td></tr>
+      <tr><td><a class="cref" href="#c2"><span class="num">2</span> Description Shortlist (<code>v2d</code>)</a></td><td class="n">86%</td><td class="n">74%</td><td class="n">3%</td><td class="n">84%</td><td class="n">2.5%</td><td class="n">10,700</td></tr>
+      <tr class="pick"><td><a class="cref" href="#c3"><span class="num">3</span> Work-Record Shortlist (<code>v2</code>)</a></td><td class="n">97%</td><td class="n">100%</td><td class="n">3%</td><td class="n">85%</td><td class="n">0.7%</td><td class="n">11,000</td></tr>
+      <tr><td><a class="cref" href="#c4"><span class="num">4</span> Strict Ask Prompt (<code>v3</code>)</a></td><td class="n">94%</td><td class="n">100%</td><td class="n">7%</td><td class="n">88%</td><td class="n">0.7%</td><td class="n">11,200</td></tr>
+      <tr><td><a class="cref" href="#c5"><span class="num">5</span> Keyword Gate (<code>v4</code>)</a></td><td class="n">90%</td><td class="n">96%</td><td class="n">12%</td><td class="n">77%</td><td class="n">0.2%</td><td class="n">11,300</td></tr>
+      <tr><td><a class="cref" href="#c6"><span class="num">6</span> Pre-Routing LLM Judge (<code>v5</code>)</a></td><td class="n">93%</td><td class="n">100%</td><td class="n">9%</td><td class="n">90%</td><td class="n">1.2%</td><td class="n">13,700</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Accuracy Across Roster Sizes &amp; Per-Contact Crowding</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Configuration</th><th class="n">20 Agents</th><th class="n">160 Agents</th><th class="n">640 Agents</th><th class="n">160 Crowded (<code>--heavy</code>)</th></tr></thead>
+    <tbody>
+      <tr><td><a class="cref" href="#c0"><span class="num">0</span> Baseline (<code>v0</code>)</a></td><td class="n">81%</td><td class="n">78%</td><td class="n">77%</td><td class="n">83% <span class="note">(68% strict)</span></td></tr>
+      <tr><td><a class="cref" href="#c1"><span class="num">1</span> Prompt Rewrite (<code>v1</code>)</a></td><td class="n">81%</td><td class="n">81%</td><td class="n">81%</td><td class="n">83%</td></tr>
+      <tr><td><a class="cref" href="#c2"><span class="num">2</span> Description Shortlist (<code>v2d</code>)</a></td><td class="n">87%</td><td class="n">86%</td><td class="n">85%</td><td class="n">89%</td></tr>
+      <tr class="pick"><td><a class="cref" href="#c3"><span class="num">3</span> Work-Record Shortlist (<code>v2</code>)</a></td><td class="n">96%</td><td class="n">97%</td><td class="n">95%</td><td class="n">95% <span class="note">(85% strict)</span></td></tr>
+      <tr><td><a class="cref" href="#c4"><span class="num">4</span> Strict Ask Prompt (<code>v3</code>)</a></td><td class="n">94%</td><td class="n">94%</td><td class="n">91%</td><td class="n">91%</td></tr>
+      <tr><td><a class="cref" href="#c5"><span class="num">5</span> Keyword Gate (<code>v4</code>)</a></td><td class="n">91%</td><td class="n">90%</td><td class="n">91%</td><td class="n">85%</td></tr>
+      <tr><td><a class="cref" href="#c6"><span class="num">6</span> Pre-Routing LLM Judge (<code>v5</code>)</a></td><td class="n">94%</td><td class="n">93%</td><td class="n">93%</td><td class="n">94%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note"><strong>How the crowded (<code>--heavy</code>) column is graded:</strong> Because each core contact in <code>--heavy</code> holds up to 8 active agents alongside 10 first-name collisions, standard crowded grading applies two fair UX allowances: a clarifying question does not have to recite all 8 tasks verbatim to count as valid, and <em>"no, the other Gustavo"</em> corrections are excluded because "the other" has no single answer across 11 Gustavos. Unadjusted strict scores with zero allowances appear in parentheses (<code>68%</code> for <code>v0</code> vs. <code>85%</code> for <code>v2</code>).</p>
+
+  <h3>What the Progression Showed</h3>
+  <ul>
+    <li><strong>Prompting without metadata stalls (<code>v0</code> → <code>v1</code>):</strong> Allowing the orchestrator to ask lifts clarification recall from 35% to 67%, but overall accuracy barely moves (78% → 81%). Without task records showing what each existing agent actually covers, telling the model <em>"new work gets a new agent"</em> causes duplicate creation to jump from 3.2% to 7.4%, canceling out most of the ambiguity gains.</li>
+    <li><strong>Shortlisting summaries cuts tokens, but structured work records drive accuracy (<code>v2d</code> → <code>v2</code>):</strong> Shortlisting over one-line descriptions (<code>v2d</code>) immediately cuts prompt tokens by ~40% and lifts accuracy to 86%. Moving to structured tool-call records and <code>&lt;matched_contacts&gt;</code> (<code>v2</code>) adds <strong>+11 points</strong> on top of <code>v2d</code> (86% → 97%): <code>v2d</code> scores <strong>0%</strong> on unrostered contacts (vs. 100% for <code>v2</code>), <strong>31%</strong> on shared claims adjusters where the adjuster's email is CC'd inside thread records rather than the agent title (vs. 100% for <code>v2</code>), and creates more than 3× as many duplicate agents (2.5% vs. 0.7%). Even if unrostered-contact cases are removed entirely, <code>v2</code> still outperforms <code>v2d</code> across all three sizes (<code>95 / 96 / 95%</code> vs. <code>94 / 93 / 91%</code>).</li>
+    <li><strong>External forcing layers hurt precision (<code>v2</code> vs. <code>v3</code>, <code>v4</code>, <code>v5</code>):</strong> Once <code>v2</code> reached 100% clarification recall on dev, stricter layers had no missed questions left to catch and could only add false positives. A hard <code>IMPORTANT</code> prompt rule (<code>v3</code>) doubled unnecessary questions (3% → 7%). A Python keyword-score gate (<code>v4</code>) could not recognize semantic paraphrases (<em>"are the new seats live?"</em> vs. a software subscription agent), pushing unnecessary asks to 12% and dropping Turn-2 accuracy to 77%. Even the separate temperature-0 LLM classifier (<code>v5</code>), which I expected to win before running the ablation, trailed or tied <code>v2</code> overall (93% vs. 97%) while adding an extra LLM round-trip on every message and raising false asks to 9% (partly because of a post-run bug where single-candidate shortlists still allowed an <code>ask</code> label). Its one genuine advantage was Turn-2 accuracy (90% vs. 85%), where terse replies like <em>"the repair one"</em> benefit from dedicated candidate labeling.</li>
+  </ul>
+  <p class="callout"><strong>Why <code>v2</code> was chosen as the default:</strong> Upstream OpenPoke did not fail because Claude Haiku refused to ask clarifying questions; it failed because bare agent names hid the ambiguity. Once <code>v2</code> surfaces structured work records and matching contacts in a compact shortlist, a single orchestrator call outperforms every multi-layer gate on accuracy, latency, and cost.</p>
+</section>
+
+<section id="chosen">
+  <h2>6. Held-Out &amp; Stress Evaluation (<code>v2</code>)</h2>
+  <p>All ablation decisions and prompt edits were locked on the development world before running the reserved <strong>held-out world</strong> (a separate random seed with unseen contacts, unseen task pairings, and shifted category weights) a single time. Scores land 3 to 6 points below development, which is the normal gap between a tuning split and untouched test data, and <code>v2</code> maintains a <strong>+12 to +18 point</strong> margin over <code>v0</code> across every roster size:</p>
+  <figure>
+    <h4>Outcome Breakdown at 160 Agents (Held-Out Set: 158 Cases, 143 Scored)</h4>
+    <div class="bars">
+      <span>Baseline (<code>v0</code>)</span>
+      <div class="bar" role="img" aria-label="Baseline: 78 percent accurate, 15 percent acted without asking, 4 percent duplicate, 3 percent other">
+        <span class="s-right" style="flex:78.3">78%</span><span class="s-missed" style="flex:14.7">15%</span><span class="s-dup" style="flex:4.2"></span><span class="s-other" style="flex:2.8"></span></div>
+      <span>Chosen (<code>v2</code>)</span>
+      <div class="bar" role="img" aria-label="Configuration 3: 92 percent accurate, 1 percent acted without asking, 5 percent unnecessary question, 2 percent duplicate, 1 percent other">
+        <span class="s-right" style="flex:91.6">92%</span><span class="s-missed" style="flex:0.7"></span><span class="s-need" style="flex:4.9">5%</span><span class="s-dup" style="flex:2.1"></span><span class="s-other" style="flex:0.7"></span></div>
+    </div>
+    <div class="legend"><span><i class="s-right"></i>Correct outcome</span><span><i class="s-missed"></i>Acted without asking</span><span><i class="s-need"></i>Unnecessary question</span><span><i class="s-dup"></i>Duplicate agent</span><span><i class="s-other"></i>Other errors</span></div>
+  </figure>
+
+  <div class="scroll"><table>
+    <thead><tr><th>Held-Out Metric</th><th class="n">20 Agents</th><th class="n">160 Agents</th><th class="n">640 Agents</th></tr></thead>
+    <tbody>
+      <tr><td>Baseline (<code>v0</code>): Overall accuracy</td><td class="n">78%</td><td class="n">78%</td><td class="n">74%</td></tr>
+      <tr class="pick"><td>Work-Record Shortlist (<code>v2</code>): Overall accuracy</td><td class="n">90%</td><td class="n">92%</td><td class="n">92%</td></tr>
+      <tr><td>Baseline (<code>v0</code>): Clarifies when ambiguous</td><td class="n">47%</td><td class="n">42%</td><td class="n">33%</td></tr>
+      <tr><td>Work-Record Shortlist (<code>v2</code>): Clarifies when ambiguous</td><td class="n">92%</td><td class="n">97%</td><td class="n">97%</td></tr>
+      <tr><td>Baseline (<code>v0</code>): Unnecessary clarifications</td><td class="n">2%</td><td class="n">0%</td><td class="n">1%</td></tr>
+      <tr><td>Work-Record Shortlist (<code>v2</code>): Unnecessary clarifications</td><td class="n">7%</td><td class="n">7%</td><td class="n">7%</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Token &amp; Dollar Cost Scaling</h3>
+  <p>Because <code>v2</code> injects at most 10 candidate records regardless of total history, prompt consumption stays flat at <strong>10,300–10,700 tokens</strong> from 20 to 640 agents, whereas <code>v0</code> climbs from 11,400 to 39,700 tokens:</p>
+  <figure>
+    <h4>Prompt Tokens per Message by Roster Size (Held-Out Set)</h4>
+    <svg viewBox="0 0 640 270" role="img" aria-label="Baseline rises from 11,400 tokens at 20 agents to 39,700 at 640. Chosen v2 stays flat near 10,500.">
+      <g stroke="var(--rule)"><line x1="70" x2="500" y1="30" y2="30"/><line x1="70" x2="500" y1="78" y2="78"/><line x1="70" x2="500" y1="126" y2="126"/><line x1="70" x2="500" y1="174" y2="174"/><line x1="70" x2="500" y1="222" y2="222"/></g>
+      <g text-anchor="end"><text x="62" y="34">40,000</text><text x="62" y="82">30,000</text><text x="62" y="130">20,000</text><text x="62" y="178">10,000</text><text x="62" y="226">0</text></g>
+      <polyline fill="none" stroke="var(--other)" stroke-width="2.5" points="90,167.5 285,137.3 480,31.4"/>
+      <g fill="var(--other)"><circle cx="90" cy="167.5" r="4"/><circle cx="285" cy="137.3" r="4"/><circle cx="480" cy="31.4" r="4"/></g>
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="90,172.4 285,171.8 480,170.7"/>
+      <g fill="var(--accent)"><circle cx="90" cy="172.4" r="4"/><circle cx="285" cy="171.8" r="4"/><circle cx="480" cy="170.7" r="4"/></g>
+      <g text-anchor="middle"><text x="90" y="155">11,400</text><text x="285" y="125">17,700</text><text x="468" y="20">39,700</text>
+        <text x="90" y="192" class="ink">10,300</text><text x="285" y="192" class="ink">10,500</text><text x="480" y="192" class="ink">10,700</text>
+        <text x="90" y="246">20 agents</text><text x="285" y="246">160 agents</text><text x="480" y="246">640 agents</text></g>
+      <text x="512" y="35" style="font-weight:600">Baseline (v0)</text><text x="512" y="175" class="ink" style="font-weight:600">Chosen (v2)</text>
+    </svg>
+    <figcaption>With Anthropic prompt caching enabled on the static system prompt, <code>v2</code> costs slightly more at 20 agents ($0.0008 vs. $0.0005 per message because rich candidate records outweigh 20 bare names), breaks even around 160 agents, and costs roughly one-third as much at 640 ($0.0008 vs. $0.0023).</figcaption>
+  </figure>
+
+  <h3>Per-Category Deltas (Held-Out, Pooled Across Sizes)</h3>
+  <p>Pooling all three roster sizes on the held-out set makes the core behavioral tradeoff transparent. Upstream <code>v0</code> scores 100% on several unambiguous follow-up categories simply because it almost never asks questions; it pays for that habit by failing 42–100% of the time whenever a message has competing interpretations. <code>v2</code> resolves nearly every ambiguity trap while giving back 7–22 points on a subset of clear categories:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Prompt Category</th><th class="n">Baseline</th><th class="n">Chosen</th><th class="n">Delta</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Rostered vs. unrostered contact</td><td class="n">0%</td><td class="n">88%</td><td class="n">+88</td><td><div class="delta"><span></span><span class="pos axis" style="width:100%"></span></div></td></tr>
+      <tr><td>Single contact, vague task ("nudge Tessa")</td><td class="n">47%</td><td class="n">97%</td><td class="n">+50</td><td><div class="delta"><span></span><span class="pos axis" style="width:57%"></span></div></td></tr>
+      <tr><td>Shared first name, no topic clue</td><td class="n">53%</td><td class="n">100%</td><td class="n">+47</td><td><div class="delta"><span></span><span class="pos axis" style="width:53%"></span></div></td></tr>
+      <tr><td>Shared intermediary (claims adjuster)</td><td class="n">58%</td><td class="n">100%</td><td class="n">+42</td><td><div class="delta"><span></span><span class="pos axis" style="width:48%"></span></div></td></tr>
+      <tr><td>User correction ("no, the other one")</td><td class="n">47%</td><td class="n">80%</td><td class="n">+33</td><td><div class="delta"><span></span><span class="pos axis" style="width:38%"></span></div></td></tr>
+      <tr><td>Multi-task contact, topic named</td><td class="n">81%</td><td class="n">97%</td><td class="n">+17</td><td><div class="delta"><span></span><span class="pos axis" style="width:19%"></span></div></td></tr>
+      <tr><td>Shared first name, full name is new contact</td><td class="n">91%</td><td class="n">100%</td><td class="n">+9</td><td><div class="delta"><span></span><span class="pos axis" style="width:10%"></span></div></td></tr>
+      <tr><td>Email alert follow-up</td><td class="n">92%</td><td class="n">100%</td><td class="n">+8</td><td><div class="delta"><span></span><span class="pos axis" style="width:9%"></span></div></td></tr>
+      <tr><td>Informal text, paraphrased topic, chat, post-question</td><td class="n">80–100%</td><td class="n">same</td><td class="n">0</td><td><div class="delta"><span></span><span class="axis"></span></div></td></tr>
+      <tr><td>Brand-new contact</td><td class="n">87%</td><td class="n">80%</td><td class="n">−7</td><td><div class="delta"><span class="neg" style="width:8%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Topic switch</td><td class="n">92%</td><td class="n">83%</td><td class="n">−8</td><td><div class="delta"><span class="neg" style="width:9%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Inbox-scanner trap</td><td class="n">100%</td><td class="n">92%</td><td class="n">−8</td><td><div class="delta"><span class="neg" style="width:9%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Clear follow-up</td><td class="n">100%</td><td class="n">88%</td><td class="n">−12</td><td><div class="delta"><span class="neg" style="width:14%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Follow-up after topic gap</td><td class="n">100%</td><td class="n">87%</td><td class="n">−13</td><td><div class="delta"><span class="neg" style="width:15%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Pronoun follow-up ("ok send that")</td><td class="n">100%</td><td class="n">83%</td><td class="n">−17</td><td><div class="delta"><span class="neg" style="width:19%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Two tasks in one message</td><td class="n">100%</td><td class="n">80%</td><td class="n">−20</td><td><div class="delta"><span class="neg" style="width:23%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Shared first name, topic settles</td><td class="n">100%</td><td class="n">78%</td><td class="n">−22</td><td><div class="delta"><span class="neg" style="width:25%"></span><span class="axis"></span></div></td></tr>
+    </tbody>
+  </table></div>
+  <p>Crucially, almost every <code>v2</code> miss in the bottom rows is a cautious clarifying question rather than an email sent to the wrong person. Even if the unrostered-contact category is excluded completely, <code>v2</code> still beats <code>v0</code> cleanly at all three sizes (<strong>91 / 92 / 92%</strong> vs. <strong>85 / 85 / 80%</strong>).</p>
+
+  <h3>Pre-Registered Pass Bars &amp; Crowded (<code>--heavy</code>) Generalization</h3>
+  <p>Before running any modified variant, I committed eight quantitative pass bars against the held-out world. <code>v2</code> met five and missed three:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Pre-Registered Target</th><th>Result (20 / 160 / 640)</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Overall accuracy ≥ 88%</td><td>90% / 92% / 92%</td><td class="met">Met</td></tr>
+      <tr><td>Clarifies when ambiguous ≥ 80%</td><td>92% / 97% / 97%</td><td class="met">Met</td></tr>
+      <tr><td>Turn-1 wrong-person routing ≤ 1%</td><td>0% / 0% / 0%</td><td class="met">Met</td></tr>
+      <tr><td>640-agent accuracy within 3 pts of 20-agent</td><td>+2 pts at 640</td><td class="met">Met</td></tr>
+      <tr><td>Prompt tokens ≤ 15,000</td><td>~10,500</td><td class="met">Met</td></tr>
+      <tr><td>Unnecessary clarifications ≤ 5%</td><td>7% / 7% / 7%</td><td class="miss">Missed</td></tr>
+      <tr><td>Turn-2 accuracy after user answer ≥ 85%</td><td>88% / 82% / 78%</td><td class="miss">Missed at 160 &amp; 640</td></tr>
+      <tr><td>Duplicate creation ≤ 1%</td><td>1.4% / 2.1% / 1.4%</td><td class="miss">Missed</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">On Turn 2 (after a scripted user reply), <code>v2</code> misrouted to the wrong person once in 90 runs at 20 agents and zero times at 160 and 640.</p>
+
+  <p>On the <strong>160-agent crowded (<code>--heavy</code>) stress roster</strong> (where every active contact holds up to 8 unrelated tasks alongside 10 first-name collisions), <code>v2</code> prevents the collapse seen in <code>v0</code> across both worlds:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Crowded Roster (<code>--heavy</code>, 160 Agents)</th><th class="n">Dev <code>v0</code></th><th class="n">Dev <code>v2</code></th><th class="n">Held-Out <code>v2</code></th></tr></thead>
+    <tbody>
+      <tr class="pick"><td>Overall accuracy (with UX allowances)</td><td class="n">83%</td><td class="n">95%</td><td class="n">91%</td></tr>
+      <tr><td>Strict unadjusted accuracy</td><td class="n">68%</td><td class="n">85%</td><td class="n">80%</td></tr>
+      <tr><td>Duplicate agent creation</td><td class="n">7.4%</td><td class="n">0.5%</td><td class="n">0.7%</td></tr>
+      <tr><td>Turn-2 accuracy after user answers</td><td class="n">59%</td><td class="n">79%</td><td class="n">76%</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Noisy &amp; Informal Stress Set (40 Untuned Cases)</h3>
+  <p>In both main benchmarks, contact names in user prompts are spelled cleanly as they appear in the address book (aside from one 20-case typo slice). Real chat messages are messier: users write shortened nicknames (<em>"Wes"</em> for Wesley), last names alone (<em>"ask Oduya"</em>), lowercase typos, or mention one person while addressing another (<em>"tell Priya that Marcus approved the budget"</em>). After locking the main results, I wrote a 40-case informal stress set and ran <code>v0</code> and <code>v2</code> once at 160 agents without tuning:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Scenario</th><th class="n">Baseline (<code>v0</code>)</th><th class="n">Chosen (<code>v2</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Surname only ("ask Oduya…")</td><td class="n">3 / 6</td><td class="n">6 / 6</td></tr>
+      <tr><td>Topic only, no name</td><td class="n">2 / 10</td><td class="n">10 / 10</td></tr>
+      <tr><td>Misspelled surname</td><td class="n">6 / 6</td><td class="n">6 / 6</td></tr>
+      <tr><td>Shortened first name ("ask Wes…" for Wesley)</td><td class="n">4 / 6</td><td class="n">1 / 6</td></tr>
+      <tr><td>Lowercase + typo in first name</td><td class="n">5 / 6</td><td class="n">3 / 6</td></tr>
+      <tr><td>Two people mentioned, one recipient</td><td class="n">5 / 6</td><td class="n">2 / 6</td></tr>
+      <tr class="pick"><td>Total (40 cases)</td><td class="n">25 / 40 (62%)</td><td class="n">28 / 40 (70%)</td></tr>
+    </tbody>
+  </table></div>
+  <p>The split exposes both the strength and the sharpest edge of <code>v2</code>'s deterministic lookup. When a first name is missing altogether, <code>v2</code> goes <strong>16 / 16</strong> (vs. <code>5 / 16</code> for <code>v0</code>) via surname and BM25 topic matching, and across all 40 cases <code>v2</code> commits <strong>0 wrong-person errors</strong> (vs. <strong>6</strong> for <code>v0</code>). However, <code>v2</code> regresses on shortened first names (<em>"Wes"</em> does not match <code>Wesley</code> under <code>match_people()</code>'s whole-word token check, hiding Wesley's agent from the shortlist while <code>v0</code> sees every agent name in raw text) and over-asks when two contacts are mentioned in the same sentence because both appear in <code>&lt;matched_contacts&gt;</code>.</p>
+
+  <h3>Diagnosing the 7% False Asks &amp; the <code>v2b</code> Attribution Test</h3>
+  <p>My initial hypothesis for <code>v2</code>'s 7% unnecessary-ask rate on held-out was that BM25 topic matches were pulling in unrelated agents sharing generic words like <em>"claim"</em> or <em>"invoice"</em>, tempting the orchestrator to ask about them. To test that, I built a small post-hoc variant (<code>v2b</code>) that tags each shortlisted candidate with how it was retrieved (for example, <code>found_by="topic words only"</code> when no contact matched) and instructs the prompt to ignore weak topic-only bystanders when another candidate matches both person and topic.</p>
+  <p>On the development set across 20, 160, and 640 agents, <code>v2b</code> tied <code>v2</code> (<code>96 / 97 / 97%</code> overall accuracy vs. <code>96 / 97 / 95%</code>, and <code>4 / 3 / 3%</code> unnecessary asks vs. <code>3 / 3 / 3%</code>), well inside the 2-point run-to-run noise band. Rather than re-running the held-out set and eroding its single-run integrity, I left <code>v2b</code> disabled by default and inspected the held-out failure traces at 160 agents directly. Those traces showed that the 7% unnecessary asks split across <strong>three distinct causes</strong>, only part of one involving topic retrieval:</p>
+  <ol>
+    <li><strong>Asking for email body details instead of checking Gmail:</strong> On prompts like <em>"email Thea with feedback on the blog mockup"</em> or <em>"tell them the new box count"</em>, <code>v2</code> asked <em>"What's the feedback you want to give Thea?"</em> rather than delegating to an execution agent to inspect recent email threads first, because <code>v2</code>'s prompt softened <code>v0</code>'s <em>"Always assume you are capable"</em> directive.</li>
+    <li><strong>Over-cautious confirmation on resolved first-name collisions:</strong> Even when the topic uniquely identified one person (<em>"ask Niemi about the expense report"</em>), the orchestrator occasionally hedged: <em>"Niemi's the expense report one, so I'm guessing him, but I want to be sure."</em></li>
+    <li><strong>Cross-client keyword overlap or unmarked draft provenance:</strong> Shared topic words occasionally surfaced a second client's thread on a topic switch, and when a contact held two agents after a draft was shown, <code>&lt;candidate_agents&gt;</code> did not explicitly flag <em>which</em> of the two agents produced that last draft.</li>
+  </ol>
+</section>
+
+<section id="gaps">
+  <h2>7. Other Codebase Fixes</h2>
+  <p>While building the harness and inspecting live server runs, I fixed eleven upstream issues on this branch, including code-enforced approval before any email is sent, and documented three larger gaps for production hardening.</p>
+  <h3>Fixed on This Branch</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Upstream Issue</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Models hardcoded to retired <code>anthropic/claude-sonnet-4</code></td><td>Configurable via <code>OPENPOKE_MODEL</code> and per-role env vars</td></tr>
+      <tr><td>Uncapped <code>max_tokens</code> triggered OpenRouter HTTP 402 rejections</td><td>Default 4,096-token cap in <code>openrouter_client/client.py</code></td></tr>
+      <tr><td>Uncached 4,400-token system prompt billed in full twice per turn</td><td>Anthropic <code>cache_control</code> breakpoints (−40 to 55% cost/turn)</td></tr>
+      <tr><td>Seven modules hardcoding <code>data/</code> paths</td><td>Unified under <code>OPENPOKE_DATA_DIR</code></td></tr>
+      <tr><td>Log filename collisions + lockless <code>roster.json</code> truncation</td><td>Collision-free <code>ag_xxxxxxxx</code> IDs in transactional SQLite</td></tr>
+      <tr><td>Swallowed orchestrator exceptions &amp; silent 8-step loop timeouts</td><td>Logged tracebacks + user-visible fallback replies</td></tr>
+      <tr><td>No transient API retry logic</td><td>Retry with backoff (2 retries) on timeouts, 429s, and 5xx</td></tr>
+      <tr><td>Hallucinated <code>reacttomessage</code> tool &amp; unfilled prompt placeholder</td><td>Cleaned both system prompts</td></tr>
+      <tr><td>Truncated execution logs (200/500 chars) lost Gmail <code>thread_id</code>s</td><td>Inject participant emails and <code>thread_id</code>s from SQLite work record</td></tr>
+      <tr><td><code>gmail_reply_to_thread</code> and <code>gmail_forward_email</code> sent immediately; only a prompt line asked for confirmation</td><td>Every draft, reply and forward is held with an approval ID. It is sent only after the user approves it on their own turn, once its exact text has been shown, and each approval sends once (<code>server/services/approvals.py</code>). An agent's report or an email alert can never approve.</td></tr>
+      <tr><td>Zero tests or CI</td><td>51 <code>pytest</code> unit tests, dataset validator, replay harness, GitHub Actions</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Flagged for Production</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Production Gap</th><th>Recommended Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Unbounded execution-agent log replay</td><td>Window to last <em>N</em> turns now that thread IDs and contacts live in SQLite</td></tr>
+      <tr><td>Concurrent runs on the same agent (reminder + chat)</td><td>Per-<code>agent_id</code> async lock in <code>ExecutionBatchManager</code></td></tr>
+      <tr><td>Unauthenticated API routes</td><td>Add auth middleware before non-local deployment</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="limits">
+  <h2>8. Limitations &amp; Grading Adjustments</h2>
+  <ul>
+    <li><strong>Cold-start contacts and static summaries in the live server:</strong> The benchmark preloads a user's address book and clean one-line agent summaries, whereas the live app currently populates <code>contacts</code> incrementally as execution agents touch emails and keeps each agent's initial creation instruction as its summary. Syncing Google Contacts via Composio on OAuth connect is required to detect unrostered namesakes on day one.</li>
+    <li><strong>Boundary-stubbed Gmail execution:</strong> Evaluation runs execute the real <code>InteractionAgentRuntime</code> and SQLite lookup layer end to end, stopping at the handoff tool boundary rather than calling live Gmail APIs. Live FastAPI smoke tests verified SQLite creation and dispatch up to Composio credentials. Send approval is tested against a stand-in for Gmail: drafts, replies and forwards are held, and nothing is sent without the user's approval. A real send through Gmail was not run.</li>
+    <li><strong>Exact whole-word name matching &amp; higher agent volume:</strong> <code>match_people()</code> misses nicknames (<em>"Wes"</em> → <code>Wesley</code>) and first-name typos, and scoping one agent per task creates more rows over time than contact-level reuse (though FTS5 shortlisting keeps per-turn token cost flat).</li>
+    <li><strong>Synthetic template distribution &amp; single-model evaluation:</strong> Both benchmark worlds come from one deterministic generator, and all variants were evaluated on <code>anthropic/claude-haiku-5.5</code> (with three repeats on <code>v0</code> and a single pass per size on <code>v1</code>–<code>v5</code>).</li>
+  </ul>
+  <p>Four grading rules were refined after inspecting failure traces where the initial strict check penalized sensible behavior. Every adjustment was applied uniformly across all saved runs via <code>evals/rescore.py</code> and either helped <code>v0</code> or helped both systems roughly equally:</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Grading Refinement</th><th>Rationale</th><th>Net Impact</th></tr></thead>
+    <tbody>
+      <tr><td>Left <em>Same contact, new topic</em> (30) &amp; <em>One-off lookup</em> (12) unscored</td><td>Upstream prompts contact-level reuse while <code>v2</code> scopes per task; scoring either preference as wrong would bias the benchmark</td><td>+1–3 pts on <code>v0</code></td></tr>
+      <tr><td>Allowed <code>"no, the other Bruno"</code> corrections to also notify the cancelled agent</td><td>Telling the mistakenly chosen agent to discard its draft is safer than leaving a stale draft behind</td><td>+1–2 pts <code>v0</code>; +3 pts <code>v2</code></td></tr>
+      <tr><td>Accepted new-agent creation after person-disambiguation answers</td><td>Consistent with neutral treatment of contact-level vs. task-level granularity</td><td>+5 pts Turn 2 on both</td></tr>
+      <tr><td>Reported both relaxed and strict scores on <code>--heavy</code> crowding</td><td>Listing 8 tasks verbatim in chat is poor UX, and <code>"the other X"</code> is undefined across 11 namesakes</td><td>Both scores reported in full</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="next">
+  <h2>9. Next Steps</h2>
+  <ol>
+    <li><strong>Cut the 7% false asks</strong> by restoring a scoped rule to delegate inbox lookups when body details are missing and tagging active <code>agent_id</code>s on draft replies.</li>
+    <li><strong>Sync Google Contacts via Composio</strong> and update agent summaries from latest thread subjects.</li>
+    <li><strong>Run the LLM judge (<code>v5</code>) only on Turn-2 user answers</strong> (+5–10 pts where replies are terse, zero overhead on Turn 1).</li>
+    <li><strong>Add nickname expansion, edit-distance matching, and recipient-vs-mention parsing</strong> in <code>match_people()</code>.</li>
+    <li><strong>Test smaller/older models</strong> and organic human-written email traffic.</li>
+  </ol>
+</section>
+
+<section id="reproduce">
+  <h2>10. Reproducibility</h2>
+<pre>python -m pytest tests -q                                          # 51 unit tests (no API calls)
+python -m evals.worlds.generate &amp;&amp; python -m evals.worlds.heavy    # rebuild worlds from seeds
+shasum -a 256 -c evals/CHECKSUMS                                   # verify frozen dataset hashes
+python -m evals.cases.validate                                     # validate cases against worlds
+python -m evals.references dev                                     # test grader on 4 reference policies
+python -m evals.report dev                                         # ablation tables from saved runs
+python -m evals.report heldout                                     # held-out results
+python -m evals.report --categories heldout                        # category deltas
+python -m evals.offline lookup                                     # verify 100% candidate recall
+
+# Live run (requires OPENROUTER_API_KEY):
+python -m evals.run --world dev --version v2 --sizes 20,160,640</pre>
+  <p class="note">CLI versions: <code>v0</code> (0 · Baseline), <code>v1</code> (1 · Prompt Rewrite), <code>v2d</code> (2 · Description Shortlist), <code>v2</code> (3 · Work-Record Shortlist, default), <code>v3</code> (4 · Strict Ask Prompt), <code>v4</code> (5 · Keyword Gate), <code>v5</code> (6 · Pre-Routing LLM Judge), <code>v2b</code> (attribution test). Saved traces live in <code>evals/results/</code>; supporting notes and experiment logs live in <code>docs/agent-overload/</code>.</p>
+</section>
+</main>
+</div>
+</body>
+</html>

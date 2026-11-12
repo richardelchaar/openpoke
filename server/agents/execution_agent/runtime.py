@@ -9,6 +9,7 @@ from .agent import ExecutionAgent
 from .tools import get_tool_schemas, get_tool_registry
 from ...config import get_settings
 from ...openrouter_client import request_chat_completion
+from ...services.agents import get_agent_store, record_tool_call
 from ...logging_config import logger
 
 
@@ -112,6 +113,8 @@ class ExecutionAgentRuntime:
                         self._safe_json_dump(tool_args),
                         record_payload
                     )
+                    if success:
+                        self._update_work_record(tool_name, tool_args)
 
                     tool_message = {
                         "role": "tool",
@@ -149,6 +152,17 @@ class ExecutionAgentRuntime:
             )
 
     # Execute OpenRouter API call with system prompt, messages, and optional tool schemas
+    def _update_work_record(self, tool_name: str, tool_args: Dict[str, Any]) -> None:
+        """Copy what the agent just acted on onto its work record, so the lookup can find it."""
+        if get_settings().routing_lookup != "records":
+            return
+        try:
+            store = get_agent_store()
+            if store.exists(self.agent.name):   # with the lookup on, an agent's name is its id
+                record_tool_call(store, self.agent.name, tool_name, tool_args)
+        except Exception as exc:  # the record is a by-product; never fail the task for it
+            logger.warning(f"[{self.agent.name}] Could not update work record: {exc}")
+
     async def _make_llm_call(self, system_prompt: str, messages: List[Dict], with_tools: bool) -> Dict:
         """Make an LLM call."""
         tools_to_send = self.tool_schemas if with_tools else None

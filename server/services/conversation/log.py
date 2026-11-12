@@ -6,7 +6,7 @@ from html import escape, unescape
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Protocol, Tuple
 
-from ...config import get_settings
+from ...config import get_data_dir, get_settings
 from ...logging_config import logger
 from ...models import ChatMessage
 from ...utils.timezones import now_in_user_timezone
@@ -16,7 +16,7 @@ if TYPE_CHECKING:  # pragma: no cover - used for type checkers only
     from .summarization import WorkingMemoryLog
 
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DATA_DIR = get_data_dir()
 _CONVERSATION_LOG_PATH = _DATA_DIR / "conversation" / "poke_conversation.log"
 
 
@@ -144,6 +144,31 @@ class ConversationLog:
     def record_reply(self, content: str) -> None:
         timestamp = self._append("poke_reply", content)
         self._working_memory_log.append_entry("poke_reply", content, timestamp)
+
+    def record_handoff(self, agent_id: str, title: str, instructions: str) -> None:
+        """Record which agent was handed what, so later turns know who has the work."""
+        payload = f"{agent_id} | {title} | {instructions}"
+        timestamp = self._append("handoff", payload)
+        self._working_memory_log.append_entry("handoff", payload, timestamp)
+
+    def recent_handoffs(self, limit: int) -> List[str]:
+        """Agent ids from the most recent hand-offs, newest first, without repeats."""
+        ids: List[str] = []
+        for tag, _, payload in reversed(list(self.iter_entries())):
+            if tag == "handoff":
+                agent_id = payload.split(" | ", 1)[0].strip()
+                if agent_id and agent_id not in ids:
+                    ids.append(agent_id)
+                    if len(ids) >= limit:
+                        break
+        return ids
+
+    def last_shown(self) -> str:
+        """The most recent thing the user was shown: a reply, or an agent's report."""
+        for tag, _, payload in reversed(list(self.iter_entries())):
+            if tag in ("poke_reply", "agent_message"):
+                return payload
+        return ""
 
     def record_wait(self, reason: str) -> None:
         """Record a wait marker that should not reach the user-facing chat history."""
