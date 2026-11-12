@@ -235,7 +235,7 @@ Each "ask" case has up to three scripted answers: the user picks an option, says
 
 - **A validator** checks every case against its whole world, filler included: every agent exists; no word in a message is also a filler person's name; a case that should route points at exactly the people its category says; a case that should ask has two things to choose between; a case that should create has nothing to reuse; a request that names a topic shares no telling word with the wrong work. It caught one real problem: "cross-town move" contained a filler surname.
 - **A random sample of 20 cases** (10 that should ask, 10 others, fixed seed) was read against the world one by one. All 20 held.
-- **A checksum file** pins the worlds and cases.
+- **A checksum file** pins the worlds and cases. The worlds are not stored in the repository: they rebuild from their seeds to the same bytes, and the check on every push rebuilds them and compares.
 
 ### Checking the grader
 

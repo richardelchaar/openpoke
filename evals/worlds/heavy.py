@@ -45,7 +45,10 @@ def build(world_name: str) -> dict:
 
 def load_heavy(world: dict) -> dict:
     """The world with the extra work added."""
-    extra = json.loads((WORLD_DIR / f"{world['world']}.heavy.json").read_text())
+    path = WORLD_DIR / f"{world['world']}.heavy.json"
+    if not path.exists():
+        path.write_text(json.dumps(build(world["world"]), indent=1))
+    extra = json.loads(path.read_text())
     return {**world, "works": {**world["works"], **extra}}
 
 

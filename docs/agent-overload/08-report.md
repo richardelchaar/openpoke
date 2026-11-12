@@ -504,7 +504,8 @@ None of these call a model.
 
 ```
 python -m pytest tests -q                  # 39 tests
-shasum -a 256 -c evals/CHECKSUMS           # the worlds and cases are the frozen ones
+python -m evals.worlds.generate && python -m evals.worlds.heavy   # rebuild the worlds from their seeds
+shasum -a 256 -c evals/CHECKSUMS           # they and the cases are the frozen ones
 python -m evals.cases.validate             # every case against its world
 python -m evals.references dev             # the grader on four simple strategies
 python -m evals.report dev                 # the results tables, from the saved runs

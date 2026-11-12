@@ -3,8 +3,8 @@
 How the router is tested. The design is in `docs/agent-overload/04-eval-design.md`.
 
 ```
-worlds/         catalogue of 40 kinds of work, name lists, the generator, the two generated worlds,
-                and the extra work used by the heavy-use roster (heavy.py, *.heavy.json)
+worlds/         catalogue of 40 kinds of work, name lists, and the generators. The worlds themselves
+                (*.json) are not stored: they rebuild from their seeds, byte for byte, on first use
 cases/          the case builder, the validator, the cases, the 20-case review sampler,
                 and the stress set (stress.py, dev.stress.jsonl)
 run.py          runs one version over the cases at one or more roster sizes
@@ -24,7 +24,7 @@ CHECKSUMS       sha256 of the frozen worlds and cases
 None of these call a model:
 
 ```
-python -m evals.worlds.generate && python -m evals.cases.build      # rebuild the test set
+python -m evals.worlds.generate && python -m evals.worlds.heavy     # rebuild the worlds from their seeds
 python -m evals.cases.validate
 shasum -a 256 -c evals/CHECKSUMS
 python -m evals.references dev

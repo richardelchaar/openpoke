@@ -325,7 +325,13 @@ class Builder:
 
 
 def load(world: str) -> dict:
-    return json.loads((WORLD_DIR / f"{world}.json").read_text())
+    """The world, built from its seed the first time it is asked for. The files are not
+    kept in the repository: they are large, and building them again gives the same bytes,
+    which evals/CHECKSUMS verifies."""
+    path = WORLD_DIR / f"{world}.json"
+    if not path.exists():
+        path.write_text(json.dumps(Builder(world).build(), indent=1))
+    return json.loads(path.read_text())
 
 
 def main() -> None:

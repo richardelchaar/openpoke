@@ -14,8 +14,11 @@ jobs:
       # No model calls and no API key in any of these.
       - name: Unit tests
         run: python -m pytest tests -q
-      - name: The worlds and cases are the ones that were frozen
-        run: sha256sum -c evals/CHECKSUMS
+      - name: The worlds rebuild from their seeds, and they and the cases are the ones that were frozen
+        run: |
+          python -m evals.worlds.generate
+          python -m evals.worlds.heavy
+          sha256sum -c evals/CHECKSUMS
       - name: Every case is consistent with its world
         run: python -m evals.cases.validate
       - name: The grader gives the reference strategies the scores they should get
