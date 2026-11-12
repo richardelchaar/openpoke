@@ -1,0 +1,2 @@
+# The generated test worlds are data, not code: keep them out of diffs and line counts.
+evals/worlds/*.json -diff linguist-generated=true
