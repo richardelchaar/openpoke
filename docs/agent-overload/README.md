@@ -4,7 +4,7 @@ My work on agent overload in OpenPoke: what the problem is, what I changed, and 
 
 Based on `shlokkhemani/openpoke` at commit `5b5f635`.
 
-**Start with the report:** [report.html](report.html) is the full write-up with charts (download it and open it in a browser), and [08-report.md](08-report.md) is the same text in Markdown.
+**Start with the report:** [https://richardelchaar.github.io/openpoke/agent-overload/report.html](https://richardelchaar.github.io/openpoke/agent-overload/report.html) is the full write-up as a page, with charts and diagrams. [08-report.md](08-report.md) is the same text in Markdown.
 
 ---
 
