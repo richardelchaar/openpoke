@@ -11,7 +11,9 @@ from typing import Dict, List
 
 # Versions that write a hand-off entry into the conversation log. In real use they would
 # have written one for each earlier hand-off, so the chat before a case includes them.
-RECORDS_HANDOFFS = {"v2", "v2b", "v3", "v4", "v5"}
+RECORDS_HANDOFFS = {"v2", "v2b", "v2d", "v3", "v4", "v5"}
+# Versions that keep only a title and a description for each agent.
+DESCRIPTION_ONLY = {"v2d"}
 # Versions where each agent has a work record and the orchestrator sees candidates.
 USES_RECORDS = RECORDS_HANDOFFS
 
@@ -22,7 +24,9 @@ def write_world(world: dict, roster: List[str], case: dict, version: str, data_d
 
     works, people = world["works"], world["people"]
 
-    if version in USES_RECORDS:
+    if version in DESCRIPTION_ONLY:
+        write_descriptions(works, people, roster)
+    elif version in USES_RECORDS:
         write_records(works, people, roster)
     else:
         agent_roster = get_agent_roster()
@@ -66,6 +70,23 @@ def write_records(works: dict, people: dict, roster: List[str]) -> None:
             for turn in work["history"]:
                 for call in turn["calls"]:
                     record_tool_call(store, aid, call["tool"], call["args"])
+
+
+def write_descriptions(works: dict, people: dict, roster: List[str]) -> None:
+    """Each agent as a title and one line: what the work is and who it is with. This is
+    what a system holds if it keeps a description per agent and no record of what the
+    agent did. There are no addresses, threads or contacts."""
+    from server.services.agents import get_agent_store
+
+    store = get_agent_store()
+    with store.batch():
+        for aid in roster:
+            work = works[aid]
+            description = work["summary"]
+            if work["person"]:
+                p = people[work["person"]]
+                description = f"{description}; with {p['first']} {p['last']}"
+            store.create(work["name"], summary=description, agent_id=aid, created_at=work["started"])
 
 
 def read_turn(version: str, tool_calls: List[dict], names: Dict[str, str]) -> dict:

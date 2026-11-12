@@ -112,6 +112,12 @@ def lookup(message: str, store: AgentStore, recent: List[str], limit: int = MAX_
     for person in from_chat:
         for agent_id in person.agents:
             add(agent_id, "chat")
+    if not people and not from_chat and last_shown and not store.known_people():
+        # With descriptions only there are no people to match, so the last thing shown is
+        # searched by its words instead.
+        shown = " ".join(w for w in words(last_shown) if w not in STOP_WORDS and len(w) > 2)
+        for agent_id, _ in store.search(shown)[:3]:
+            add(agent_id, "chat")
     for agent_id in list(scores)[:TOPIC_MATCHES]:
         add(agent_id, "topic")
 

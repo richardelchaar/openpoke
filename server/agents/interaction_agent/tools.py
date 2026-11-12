@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from ...config import get_settings
 from ...logging_config import logger
 from ...routing.lookup import STOP_WORDS, words
 from ...routing.pipeline import Routing, current_routing
@@ -292,11 +293,18 @@ def create_agent(routing: Routing, title: str, instructions: str, person_name: s
 
     # The record starts with what is known now: what the work is, and who it is with. The
     # person also becomes a contact, so a later message with their name can find them.
-    agent_id = store.create(title, summary=_first_sentence(instructions), throwaway=throwaway)
-    if person_email:
-        store.add_person(agent_id, person_email, person_name)
-        if person_name:
-            store.add_contact(person_email, person_name)
+    summary = _first_sentence(instructions)
+    if get_settings().routing_record == "description":
+        # Description only: the person is named in the description and nowhere else.
+        if person_name and person_name.lower() not in f"{title} {summary}".lower():
+            summary = f"{summary} (with {person_name})"
+        agent_id = store.create(title, summary=summary, throwaway=throwaway)
+    else:
+        agent_id = store.create(title, summary=summary, throwaway=throwaway)
+        if person_email:
+            store.add_person(agent_id, person_email, person_name)
+            if person_name:
+                store.add_contact(person_email, person_name)
     get_conversation_log().record_handoff(agent_id, title, instructions)
     get_execution_agent_logs().record_request(agent_id, instructions)
     failed = _dispatch(agent_id, instructions)

@@ -25,6 +25,7 @@ from .worlds.heavy import load_heavy
 RESULTS = Path(__file__).resolve().parent / "results"
 VERSIONS = {
     "v0": "Original", "v1": "Prompt only", "v2": "Records and lookup",
+    "v2d": "Lookup over a description only",
     "v2b": "Records and lookup, second iteration",
     "v3": "Required to ask", "v4": "Code rule", "v5": "Second model call",
 }

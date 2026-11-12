@@ -82,6 +82,10 @@ class Settings(BaseModel):
     routing_lookup: str = Field(default=os.getenv("OPENPOKE_LOOKUP", "records"))
     routing_decider: str = Field(default=os.getenv("OPENPOKE_DECIDER", "orchestrator"))
     routing_prompt: str = Field(default=os.getenv("OPENPOKE_PROMPT", "v2"))
+    # What is kept about each agent: full = the work record (people by address, threads,
+    # searches, kept from its tool calls) and the contacts table; description = a title and
+    # one line of description, nothing else.
+    routing_record: str = Field(default=os.getenv("OPENPOKE_RECORD", "full"))
     # Tell the orchestrator how each candidate was found, so it can discount one that only
     # shares a topic with the message.
     routing_explain: bool = Field(default=os.getenv("OPENPOKE_EXPLAIN_CANDIDATES", "0") == "1")

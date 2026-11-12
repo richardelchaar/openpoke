@@ -36,6 +36,10 @@ VERSIONS: Dict[str, Dict[str, str]] = {
     # v2 with one change from reading its failures: each candidate says how it was found.
     "v2b": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "orchestrator", "OPENPOKE_PROMPT": "v2",
             "OPENPOKE_EXPLAIN_CANDIDATES": "1"},
+    # v2 with only a title and a one-line description kept per agent: no people by address,
+    # no threads, no contacts.
+    "v2d": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "orchestrator", "OPENPOKE_PROMPT": "v2",
+            "OPENPOKE_RECORD": "description"},
     "v3": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "told_to_ask", "OPENPOKE_PROMPT": "v2"},
     "v4": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "code_rule", "OPENPOKE_PROMPT": "v2"},
     "v5": {"OPENPOKE_LOOKUP": "records", "OPENPOKE_DECIDER": "judge", "OPENPOKE_PROMPT": "v2"},

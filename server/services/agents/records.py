@@ -10,10 +10,14 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from ...config import get_settings
 from .store import AgentStore
 
 
 def record_tool_call(store: AgentStore, agent_id: str, tool: str, args: Dict[str, Any]) -> None:
+    if get_settings().routing_record == "description":   # nothing is kept beyond the description
+        store.touch(agent_id)
+        return
     def text(key: str) -> str:
         value = args.get(key)
         return value.strip() if isinstance(value, str) else ""
