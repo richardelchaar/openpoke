@@ -32,13 +32,13 @@ def tokens_chart(data: Dict[str, dict], winner: str) -> str:
     xs = {s: left + i * (width - left - right) / (len(sizes) - 1) for i, s in enumerate(sizes)}
     top_value = 45000
     y = lambda v: height - bottom - v / top_value * (height - top - bottom)  # noqa: E731
-    body = [text(left, 26, "Tokens per message, by roster size", 16, weight="600")]
+    body = [text(left, 26, "Tokens per message by roster size, held-out world", 16, weight="600")]
     for v in range(0, top_value + 1, 10000):
         body.append(f'<line x1="{left}" x2="{width - right}" y1="{y(v):.0f}" y2="{y(v):.0f}" stroke="#e5e7eb"/>')
         body.append(text(left - 8, y(v) + 4, f"{v:,}", 11, "end", "#6b7280"))
     for s in sizes:
         body.append(text(xs[s], height - bottom + 20, f"{s} agents", 12, "middle", "#6b7280"))
-    for version, colour, label in (("v0", GREY, "Original"), (winner, BLUE, "Records and lookup")):
+    for version, colour, label in (("v0", GREY, "Original"), (winner, BLUE, "Chosen configuration")):
         points = [(xs[s], y(data[version][str(s)]["tokens_per_case"])) for s in sizes]
         body.append(f'<polyline fill="none" stroke="{colour}" stroke-width="3" points="' + " ".join(f"{a:.0f},{b:.0f}" for a, b in points) + '"/>')
         for (a, b), s in zip(points, sizes):
@@ -61,7 +61,7 @@ def outcomes_chart(data: Dict[str, dict], winner: str, world: str, roster: str =
     width, height, left, bar_h = 720, 260, 170, 44
     span = width - left - 30
     body = [text(left, 26, f"What happened to each message: {world} world, {roster} agents", 16, weight="600")]
-    for row, (version, label) in enumerate((("v0", "Original"), (winner, "Records and lookup"))):
+    for row, (version, label) in enumerate((("v0", "Original"), (winner, "Chosen configuration"))):
         s = data[version][roster]
         n, errors = s["n"], s["errors"]
         counts = [n - sum(errors.values())] + [sum(errors.get(e, 0) for e in keys) for _, _, keys in parts[1:]]
@@ -79,15 +79,14 @@ def outcomes_chart(data: Dict[str, dict], winner: str, world: str, roster: str =
         lx, ly = left + (i % 2) * 270, 190 + (i // 2) * 20
         body.append(f'<rect x="{lx}" y="{ly - 10}" width="12" height="12" fill="{colour}"/>')
         body.append(text(lx + 18, ly, name, 12, colour="#374151"))
-    return svg(width, height, body, "Outcome of each message, original against records and lookup")
+    return svg(width, height, body, "Outcome of each message, original against the chosen configuration")
 
 
 def main(winner: str = "v2") -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    dev = collect("dev")
-    (OUT / "tokens.svg").write_text(tokens_chart(dev, winner))
-    (OUT / "outcomes.svg").write_text(outcomes_chart(dev, winner, "dev"))
-    held = collect("heldout")
+    dev, held = collect("dev"), collect("heldout")
+    (OUT / "tokens.svg").write_text(tokens_chart(held, winner))
+    (OUT / "outcomes.svg").write_text(outcomes_chart(dev, winner, "first"))
     (OUT / "outcomes-heldout.svg").write_text(outcomes_chart(held, winner, "held-out"))
     print(f"wrote {OUT}/tokens.svg, outcomes.svg, outcomes-heldout.svg")
 

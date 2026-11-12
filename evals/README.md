@@ -13,7 +13,7 @@ materialize.py  writes a world in the form each version stores agents
 grade.py        the grading rules and the summaries
 rescore.py      re-grades one saved run with the current rules
 report.py       builds every results table, and regraded.csv, from the saved runs
-charts.py       draws the report's charts from the saved runs
+charts.py       draws the charts used in the Markdown report from the saved runs
 offline.py      lookup quality, plain search against the lookup, the ask settings
 references.py   four simple strategies scored by the same grader
 results/        one file per run, runs.csv as recorded, regraded.csv under the current rules
@@ -42,4 +42,4 @@ python -m evals.run --world dev --set stress --version v2 --sizes 160 --tag stre
 ```
 
 Versions: `v0` the original, `v1` the rewritten prompt alone, `v2` records and lookup (the default),
-`v2b` v2 with each candidate saying how it was found, `v3` required to ask, `v4` code rule, `v5` a second model call.
+`v2d` v2 with only a title and one line of description kept per agent, `v2b` v2 with each candidate saying how it was found, `v3` required to ask, `v4` code rule, `v5` a second model call.
