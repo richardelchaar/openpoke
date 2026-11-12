@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
 from .agent import build_system_prompt, prepare_message_with_history
-from .tools import ToolResult, get_tool_schemas, handle_tool_call
+from .tools import ToolResult, get_tool_schemas, handle_tool_call, set_turn_origin
 from ...config import get_settings
 from ...services.conversation import get_conversation_log, get_working_memory_log
 from ...openrouter_client import request_chat_completion
@@ -153,8 +153,9 @@ class InteractionAgentRuntime:
         """Run the lookup and decider, then offer only the tools they allow this turn."""
         routing = await route_message(text, from_user=from_user)
         set_routing(routing)
+        set_turn_origin(from_user)
         self.last_routing = routing
-        self.tool_schemas = get_tool_schemas(routing)
+        self.tool_schemas = get_tool_schemas(routing, from_user=from_user)
         return routing
 
     # Core interaction loop that handles LLM calls and tool executions until completion

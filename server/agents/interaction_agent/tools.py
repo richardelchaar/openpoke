@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -9,6 +10,7 @@ from ...config import get_settings
 from ...logging_config import logger
 from ...routing.lookup import STOP_WORDS, words
 from ...routing.pipeline import Routing, current_routing
+from ...services.approvals import ApprovalError, get_approval_store
 from ...services.agents import get_agent_store
 from ...services.conversation import get_conversation_log
 from ...services.execution import get_agent_roster, get_execution_agent_logs
@@ -313,6 +315,47 @@ def create_agent(routing: Routing, title: str, instructions: str, person_name: s
         "person_name": person_name, "person_email": person_email, "throwaway": throwaway})
 
 
+# ---- Approving an email the user has seen -------------------------------------------
+
+APPROVE_SEND_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "approve_send",
+        "description": ("Record that the user approved sending one held email. Call it only when the user's latest "
+                        "message clearly approves that email, and only after its exact text was shown with send_draft. "
+                        "Then tell the agent that holds it to send it with gmail_send_approved."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "approval_id": {"type": "string", "description": "The approval_id the agent reported for the email."},
+            },
+            "required": ["approval_id"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+# Whether the turn being handled was started by the user. An agent's report or an email
+# alert is not the user, so it can never approve sending anything.
+_from_user: ContextVar[bool] = ContextVar("from_user", default=False)
+
+
+def set_turn_origin(from_user: bool) -> None:
+    _from_user.set(from_user)
+
+
+def approve_send(approval_id: str) -> ToolResult:
+    """Approve one held email, if this is the user's turn and they have seen its text."""
+    shown = [payload for tag, _, payload in get_conversation_log().iter_entries() if tag == "poke_reply"]
+    try:
+        held = get_approval_store().approve(approval_id, from_user=_from_user.get(), shown=shown)
+    except ApprovalError as exc:
+        return ToolResult(success=False, payload={"error": str(exc), "approval_id": approval_id})
+    return ToolResult(success=True, payload={
+        "status": "approved", "approval_id": approval_id, "recipient": held["recipient"],
+        "next": "Tell the agent that holds it to send it with gmail_send_approved."})
+
+
 # Send immediate message to user and record in conversation history
 def send_message_to_user(message: str) -> ToolResult:
     """Record a user-visible reply in the conversation log."""
@@ -372,19 +415,23 @@ def wait(reason: str) -> ToolResult:
 
 
 # Return predefined tool schemas for LLM function calling
-def get_tool_schemas(routing: Optional[Routing] = None):
+def get_tool_schemas(routing: Optional[Routing] = None, *, from_user: bool = False):
     """Return OpenAI-compatible tool schemas.
 
     With the lookup on, hand-off takes an agent id limited to the agents approved for this
-    turn, and creating an agent is its own tool.
+    turn, and creating an agent is its own tool. approve_send is offered only on the user's
+    own turn, and only while an email is waiting for approval.
     """
     if routing is None:
-        return TOOL_SCHEMAS
-    schemas = [schema for schema in TOOL_SCHEMAS if schema["function"]["name"] != "send_message_to_agent"]
-    if routing.approved:
-        schemas.insert(0, _handoff_schema(list(routing.approved)))
-    if routing.may_create:
-        schemas.insert(1 if routing.approved else 0, CREATE_AGENT_SCHEMA)
+        schemas = list(TOOL_SCHEMAS)
+    else:
+        schemas = [schema for schema in TOOL_SCHEMAS if schema["function"]["name"] != "send_message_to_agent"]
+        if routing.approved:
+            schemas.insert(0, _handoff_schema(list(routing.approved)))
+        if routing.may_create:
+            schemas.insert(1 if routing.approved else 0, CREATE_AGENT_SCHEMA)
+    if from_user and get_approval_store().awaiting_approval():
+        schemas.append(APPROVE_SEND_SCHEMA)
     return schemas
 
 
@@ -411,6 +458,8 @@ def handle_tool_call(name: str, arguments: Any) -> ToolResult:
             return send_message_to_user(**args)
         if name == "send_draft":
             return send_draft(**args)
+        if name == "approve_send":
+            return approve_send(str(args.get("approval_id", "")))
         if name == "wait":
             return wait(**args)
 
