@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Overload in OpenPoke</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<style>
+/* Layout: a report. Contents rail on the left, one reading column on the right, figures set into the column. */
+:root {
+  --paper: #FAF8F3; --surface: #FFFFFF; --ink: #1F2328; --muted: #5E6570; --rule: #E3DED3; --tint: #F2EEE5;
+  --accent: #2F4B66; --good: #3E7B5E; --warn: #B7791F; --bad: #A8443A; --dup: #6B5B95; --other: #9A9DA3;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --sans: "Source Sans 3", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #16181B; --surface: #1E2125; --ink: #E8E6E1; --muted: #A2A8B0; --rule: #34383E; --tint: #23262B;
+  --accent: #9DB8D3; --good: #6FB08F; --warn: #D9A54A; --bad: #D9776C; --dup: #A99AD0; --other: #7C8188; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #16181B; --surface: #1E2125; --ink: #E8E6E1; --muted: #A2A8B0; --rule: #34383E; --tint: #23262B;
+  --accent: #9DB8D3; --good: #6FB08F; --warn: #D9A54A; --bad: #D9776C; --dup: #A99AD0; --other: #7C8188; color-scheme: dark }
+
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.6; }
+.page { display: grid; grid-template-columns: 230px minmax(0, 760px); gap: 56px; justify-content: center;
+  padding-block: 48px 96px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { min-width: 0; display: flex; flex-direction: column; gap: 56px; }
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 24px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 40px; letter-spacing: -0.01em; }
+h2 { font-size: 27px; padding-top: 28px; border-top: 1px solid var(--rule); }
+h3 { font-size: 20px; margin-top: 10px; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--tint); padding: 1px 5px; border-radius: 3px; }
+pre { font-family: var(--mono); font-size: 13.5px; line-height: 1.55; background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 14px 16px; margin: 0; overflow-x: auto; }
+strong { font-weight: 600; }
+.lede { font-size: 20px; line-height: 1.5; color: var(--ink); max-width: 62ch; }
+.meta { font-size: 14.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.note { font-size: 15px; color: var(--muted); }
+
+/* contents */
+nav { position: sticky; top: 24px; align-self: start; font-size: 15px; }
+nav ol { list-style: none; padding: 0; gap: 2px; border-left: 1px solid var(--rule); }
+nav a { display: block; padding: 5px 0 5px 14px; color: var(--muted); text-decoration: none; margin-left: -1px; border-left: 2px solid transparent; }
+nav a:hover { color: var(--ink); border-left-color: var(--accent); }
+nav .eyebrow { margin-bottom: 12px; display: block; }
+details.toc { display: none; }
+
+/* headline figures */
+.figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+.figures > div { padding: 16px 18px; border-left: 1px solid var(--rule); display: flex; flex-direction: column; gap: 4px; }
+.figures > div:first-child { border-left: 0; }
+.figures .label { font-size: 13.5px; color: var(--muted); line-height: 1.35; }
+.figures .value { font-family: var(--serif); font-size: 27px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.figures .from { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* tables */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 13.5px; color: var(--muted); border-bottom: 1px solid var(--ink); white-space: nowrap; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.pick td { font-weight: 600; background: var(--tint); }
+td.miss { color: var(--bad); font-weight: 600; }
+td.met { color: var(--good); font-weight: 600; }
+caption { caption-side: bottom; text-align: left; font-size: 14px; color: var(--muted); padding-top: 8px; }
+
+/* figures */
+figure { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+figcaption { font-size: 14.5px; color: var(--muted); }
+figure h4 { margin: 0; font-family: var(--sans); font-size: 16px; font-weight: 600; }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--sans); fill: var(--muted); font-size: 12px; }
+svg .ink { fill: var(--ink); }
+
+/* stacked outcome bars */
+.bars { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 14px; align-items: center; font-size: 14.5px; }
+.bar { display: flex; height: 34px; border-radius: 2px; overflow: hidden; }
+.bar span { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 600; min-width: 0; }
+.s-right { background: var(--good); } .s-missed { background: var(--bad); } .s-need { background: var(--warn); }
+.s-dup { background: var(--dup); } .s-other { background: var(--other); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* change bars in the category table */
+.delta { display: grid; grid-template-columns: 1fr 1fr; width: 150px; height: 14px; }
+.delta span { height: 14px; }
+.delta .neg { justify-self: end; background: var(--warn); border-radius: 2px 0 0 2px; }
+.delta .pos { justify-self: start; background: var(--good); border-radius: 0 2px 2px 0; }
+.delta .axis { border-left: 1px solid var(--muted); }
+
+/* flow diagrams */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; font-size: 14.5px; }
+.flow .box { border: 1px solid var(--rule); background: var(--tint); border-radius: 4px; padding: 10px 12px; flex: 1 1 130px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.flow .box b { font-weight: 600; }
+.flow .box small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.flow .box.key { border-color: var(--accent); background: var(--surface); }
+.flow .arrow { align-self: center; color: var(--muted); font-size: 18px; flex: 0 0 auto; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.callout { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; color: var(--ink); }
+
+@media (max-width: 900px) {
+  .page { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 28px 64px; }
+  nav { display: none; }
+  details.toc { display: block; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); padding: 10px 14px; font-size: 15px; }
+  details.toc summary { font-weight: 600; cursor: pointer; }
+  details.toc ol { margin-top: 10px; }
+  h1 { font-size: 31px; } h2 { font-size: 23px; } body { font-size: 16px; } .lede { font-size: 18px; }
+  .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .figures > div:nth-child(3) { border-left: 0; } .figures > div:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .flow .arrow { display: none; }
+}
+
+/* configurations */
+.cfg { border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 24px; }
+.cfg h3 { margin: 0; display: flex; gap: 12px; align-items: baseline; }
+.num { font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--surface); background: var(--accent); border-radius: 3px; padding: 2px 7px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.cfg dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; font-size: 15.5px; }
+.cfg dt { color: var(--muted); font-weight: 600; font-size: 13.5px; padding-top: 2px; }
+.cfg dd { margin: 0; }
+a.cref { text-decoration: none; white-space: nowrap; }
+a.cref:hover { text-decoration: underline; }
+.hbars { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 8px 12px; align-items: center; font-size: 14.5px; }
+.hbars .track { background: var(--tint); height: 18px; border-radius: 2px; }
+.hbars .fill { background: var(--other); height: 18px; border-radius: 2px; }
+.hbars .fill.pick { background: var(--accent); }
+.hbars .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pending { color: var(--muted); font-style: italic; }
+@media (max-width: 900px) { .cfg dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .cfg dt { padding-top: 8px; } }
+</style>
+<style>html { color-scheme: light dark; } body { margin: 0; } img { max-width: 100%; }</style>
+</head>
+<body>
+<div class="page">
+<nav aria-label="Contents">
+  <span class="eyebrow">Contents</span>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#problem">The problem</a></li>
+    <li><a href="#dataset">The test set</a></li>
+    <li><a href="#original">How the original performs</a></li>
+    <li><a href="#built">What I built</a></li>
+    <li><a href="#results">Results for every configuration</a></li>
+    <li><a href="#chosen">The chosen configuration</a></li>
+    <li><a href="#gaps">Other gaps</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#next">What I'd do next</a></li>
+    <li><a href="#reproduce">Reproducing it</a></li>
+  </ol>
+</nav>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:16px">
+  <span class="eyebrow">Take-home report</span>
+  <h1>Agent overload in OpenPoke</h1>
+  <p class="lede">OpenPoke's orchestrator picks an agent from a list of bare names. I measured how well that works, changed what the orchestrator is shown, and measured again.</p>
+  <div class="meta"><span>Richard El-Chaar</span><span>November 2026</span><span>Branch <code>fix/agent-overload</code></span><span>Model: <code>anthropic/claude-haiku-5.5</code> throughout</span></div>
+  <details class="toc"><summary>Contents</summary>
+    <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#problem">The problem</a></li>
+    <li><a href="#dataset">The test set</a></li>
+    <li><a href="#original">How the original performs</a></li>
+    <li><a href="#built">What I built</a></li>
+    <li><a href="#results">Results for every configuration</a></li>
+    <li><a href="#chosen">The chosen configuration</a></li>
+    <li><a href="#gaps">Other gaps</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#next">What I'd do next</a></li>
+    <li><a href="#reproduce">Reproducing it</a></li>
+    </ol>
+  </details>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <div class="figures">
+    <div><span class="label">Routing decisions right</span><span class="value">92%</span><span class="from">was 78%</span></div>
+    <div><span class="label">Asks when it should</span><span class="value">97%</span><span class="from">was 42%</span></div>
+    <div><span class="label">Asks when it shouldn't</span><span class="value">7%</span><span class="from">was 0 to 2%</span></div>
+    <div><span class="label">Tokens per message, 640 agents</span><span class="value">10,700</span><span class="from">was 39,700</span></div>
+  </div>
+  <p class="note">Held-out test world, run once, 160 agents unless stated. "Was" is the original app on the same cases.</p>
+  <ul>
+    <li><strong>The original's largest error is acting when it should ask.</strong> Given "nudge Tessa, it's been a week" when Tessa has two pieces of work, or "send Omar my number" when there are two Omars, it asks in only 33 to 47% of cases. The rest of the time it picks one, or messages them all. It has only a list of agent names to go on, and its prompt tells it never to ask.</li>
+    <li><strong>A work record per agent and a lookup fix most of that.</strong> Each agent now keeps a record of who it has dealt with and on which threads, filled in from its own tool calls. For each message, code searches those records and the user's contacts and shows the orchestrator about ten candidates in place of every name. With that in front of it, it asks when it should 92 to 97% of the time.</li>
+    <li><strong>A one-line description per agent gets part of the way, and the work record gets the rest.</strong> I also ran the lookup over a title and a single line of description for each agent. That scores 86%, against 97% with the work record and contacts. The difference is in specific places: people who have no agent yet, a go-between copied on someone else's work, and fewer duplicates.</li>
+    <li><strong>The gain is on messages where it is unclear who or what is meant.</strong> Those go from between 0 and 58% right to between 80 and 100%. On clear messages the chosen version is 7 to 22 points worse on a few kinds, because it sometimes asks when it didn't need to. Nothing is sent to the wrong place when that happens, but the test still counts each one as a wrong outcome: part of the goal is to keep the user out of unnecessary back-and-forth, and an assistant that asks about everything would be useless. So those drops are real errors in the scores here. <a href="#dataset">The test set</a> has the rule.</li>
+    <li><strong>A longer roster does not make the original less accurate</strong> on the model I used. From 10 agents to 1,280 it stays between 73 and 80% right, because finding a named person in a long list is easy for a current model. What grows is the prompt, and so the cost: nearly four times the tokens per message at 640 agents as at 20. Two qualifications: the original does get worse when many agents belong to the same few people, and this was measured on one capable model, Claude Haiku 5.5. A weaker model may lose accuracy with size as well.</li>
+    <li><strong>Forcing the orchestrator to ask made things worse.</strong> I expected a step that decides when to ask, in code or with a second model call, to be the heart of the solution. I built it three ways and measured each on the same cases. All three asked more needless questions and no more correct ones, so they are switched off. The simplest arrangement, where the orchestrator sees the candidates and decides for itself, did best.</li>
+  </ul>
+  <p>Model calls for the whole project cost about $30.</p>
+</section>
+
+<section id="problem">
+  <h2>The problem</h2>
+  <p>OpenPoke is a personal assistant for one user and their Gmail. An orchestrator talks to the user. It does no email work itself: it hands each task to an execution agent, and each agent keeps the history of the work it has done. After days of use there are hundreds of agents.</p>
+  <figure>
+    <h4>How the original chooses an agent</h4>
+    <div class="flow">
+      <div class="box"><b>User message</b><small>"nudge Tessa, it's been a week"</small></div>
+      <span class="arrow">→</span>
+      <div class="box key"><b>Orchestrator</b><small>sees the name of every agent that exists, and nothing else about them</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>send_message_to_agent(name)</b><small>if the name matches an agent it is reused; any other spelling creates a new one</small></div>
+    </div>
+    <figcaption>The orchestrator has no record of what an agent did, and no way to know about a person the user knows who has no agent yet. Its prompt tells it to assume it can always act and to prefer any existing agent.</figcaption>
+  </figure>
+  <p>"Agent overload" is what the project's own write-up calls the result: every agent's name is sent on every request, and the agents compete for the orchestrator's attention. I took the problem to be this: <strong>choosing the right agent, creating one only when needed, and asking when the message doesn't say enough.</strong></p>
+  <p>I expected the growing list to be the cause. The first thing I measured said otherwise.</p>
+</section>
+
+<section id="dataset">
+  <h2>The test set</h2>
+  <p>The repository had no tests and no example of the failure. So before changing anything I built a set of messages where the right routing decision is known in advance, and froze it.</p>
+
+  <h3>How it is made</h3>
+  <p>A script builds it in two steps.</p>
+  <ol>
+    <li><strong>It builds a world.</strong> About 1,040 people and 1,380 agents. Each agent is one piece of work for one person, drawn from 40 kinds: claims, renewals, invoices, meetings, a dentist appointment. For example, it gives Tessa Saldanha two agents, one for a rental repair and one for a group gift.</li>
+    <li><strong>It writes messages about that world.</strong> Each kind of situation has a few phrasings written as templates, such as "nudge {person}, it's been a week". The script fills one in with a person who fits. For a vague request about someone with two pieces of work, it picks Tessa.</li>
+  </ol>
+  <p>The right answer is recorded as the message is written. The script gave Tessa two pieces of work itself, so it knows that "nudge Tessa Saldanha, it's been a week" should be met with a question, and which two agents the question should offer. No case is judged one at a time, and no language model writes the wording, so rebuilding from the same seed gives exactly the same cases.</p>
+<h3>The situations it is built around</h3>
+  <p>About 83 of the agents are the ones the messages are about. They are laid out to create the situations where routing goes wrong. The rest are filler that makes the roster as big as a test needs. Filler never shares a name with anyone in a message, so adding it cannot change the right answer.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Trap</th><th class="n">In the core</th><th>What it tests</th></tr></thead>
+    <tbody>
+      <tr><td>Two people with the same first name, each with one piece of work</td><td class="n">12 pairs</td><td>Does it tell them apart by topic, and ask when it can't?</td></tr>
+      <tr><td>One person with two pieces of work</td><td class="n">12 people</td><td>Does it pick the right one when the topic is named, and ask when it isn't?</td></tr>
+      <tr><td>A person with an agent, and a contact with the same first name and no agent</td><td class="n">12 pairs</td><td>Does it know the second person exists?</td></tr>
+      <tr><td>A person with one piece of work and a first name nobody else has</td><td class="n">18 or more</td><td>The plain case</td></tr>
+      <tr><td>An adjuster copied on several people's claims</td><td class="n">3</td><td>Does it route by the client, not the go-between?</td></tr>
+      <tr><td>An agent that read the whole inbox once and acted on nobody</td><td class="n">1</td><td>Is it wrongly treated as knowing everyone it read about?</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The cases</h3>
+  <p>448 cases in 22 categories. Each is a message, the chat that came before it, and the right outcome.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Right outcome</th><th>Category</th><th>Example</th><th class="n">Cases</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="9">Hand off to an existing agent</td><td>Clear follow-up</td><td>"ask Dalia Eriksen about the jewellery rider"</td><td class="n">22</td></tr>
+      <tr><td>Pronoun follow-up</td><td>"ok send that", after a draft was shown</td><td class="n">16</td></tr>
+      <tr><td>Follow-up after a gap</td><td>"any update from Noor on the expense report?", after chat about someone else</td><td class="n">15</td></tr>
+      <tr><td>Same person, two pieces of work, topic named</td><td>"ask Fiona about the commercial policy audit"</td><td class="n">34</td></tr>
+      <tr><td>Same first name, topic settles it</td><td>"ask Felix about the missed premium payment"</td><td class="n">34</td></tr>
+      <tr><td>Different wording</td><td>"where are we with Vera on the coverage for the trip?" for travel insurance</td><td class="n">18</td></tr>
+      <tr><td>Shared contact</td><td>"ask Greta Rossi where Anton Greenwood's claim stands"</td><td class="n">12</td></tr>
+      <tr><td>Follow-up on an email alert</td><td>"reply to that and say I'll call this afternoon"</td><td class="n">12</td></tr>
+      <tr><td>Correction</td><td>"no, the other Bruno"</td><td class="n">14</td></tr>
+      <tr><td rowspan="2">Create a new agent</td><td>Known first name, different person</td><td>"email Omar Kaur …" when only Omar Ivanov has an agent</td><td class="n">30</td></tr>
+      <tr><td>Brand-new person</td><td>"email Xavier Appleton with feedback on the team page mockup"</td><td class="n">14</td></tr>
+      <tr><td rowspan="3">Ask the user</td><td>Same person, vague</td><td>"nudge Tessa Saldanha, it's been a week" (she has two pieces of work)</td><td class="n">34</td></tr>
+      <tr><td>Same first name, nothing settles it</td><td>"send Kofi a quick note that I'll call tomorrow" (two Kofis)</td><td class="n">34</td></tr>
+      <tr><td>A person with an agent, or a contact</td><td>"invite Yara to the open house on the 20th" (two Yaras, one has no agent)</td><td class="n">30</td></tr>
+      <tr><td>Answer directly</td><td>Chat or a general question</td><td>"thanks!", "what's a deductible?"</td><td class="n">15</td></tr>
+      <tr><td rowspan="5">Robustness</td><td>Two tasks in one message</td><td>Both hand-offs right, and no question</td><td class="n">14</td></tr>
+      <tr><td>Topic switch</td><td>Chat about one person, then a request about another</td><td class="n">12</td></tr>
+      <tr><td>Inbox-scanner trap</td><td>The agent that read everything isn't used for "email Maria"</td><td class="n">12</td></tr>
+      <tr><td>Messy text</td><td>Lowercase, shorthand and a typo: "tell caleb i need the paperowrk back by friday"</td><td class="n">20</td></tr>
+      <tr><td>After a question</td><td>A question was asked and answered earlier; a follow-up must not ask again</td><td class="n">14</td></tr>
+      <tr><td rowspan="2">Reported, not scored</td><td>Same person, new topic</td><td>"email Leila Sorensen that the final installment did not go through" (she has a claim agent)</td><td class="n">30</td></tr>
+      <tr><td>One-off lookup</td><td>"find the wifi password someone sent me last year"</td><td class="n">12</td></tr>
+    </tbody>
+  </table></div>
+  <p>About three quarters of the scored cases have a clear answer and a quarter call for a question. The last two categories run for every version but count toward no rate: the original and I disagree by design about what is right there, so I report how often each version reuses an agent and score neither.</p>
+
+  <h3>One case, start to finish</h3>
+  <figure>
+    <h4>"nudge Tessa Saldanha, it's been a week"</h4>
+    <div class="flow">
+      <div class="box"><b>The world</b><small>Tessa has two agents: a rental repair (a radiator) and a group gift (a baby shower)</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>The right outcome</b><small>Ask which one. Hand off to nothing.</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>Checked by rule</b><small>No hand-off, and the reply is a question that names both: it must mention "repair" or "radiator", and "gift" or "shower"</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>Then a scripted answer</b><small>"the rental repair" → must go to that agent. "neither, it's about a tax return" → must create one. "the usual one" → may ask once more.</small></div>
+    </div>
+    <figcaption>Every case that calls for a question carries up to three scripted answers, so the turn after the question is tested as well as the question.</figcaption>
+  </figure>
+
+  
+  <h3>How a case is run and graded</h3>
+  <ul>
+    <li><strong>Each case goes through the real orchestrator code,</strong> at roster sizes of 20, 160 and 640 agents. Execution agents don't run: a hand-off is recorded and stops there.</li>
+    <li><strong>Grading is by rule, with no judging model.</strong> A turn is reduced to which agents got work, which were created, whether it asked, and what it said.</li>
+    <li><strong>A needless question is a wrong outcome.</strong> The goal is the right agent with as little back-and-forth as possible, so asking when the message was already clear counts against the overall rate like any other error. About three quarters of the cases have a clear answer. A strategy that asks every time, naming every option perfectly, scores 30%.</li>
+    <li><strong>Every wrong answer gets a type:</strong> wrong person, wrong agent, duplicate, missed question, needless question, and so on.</li>
+  </ul>
+
+  <h3>Keeping it fair</h3>
+  <ul>
+    <li><strong>The cases were frozen before the solution existed.</strong> They were committed with a checksum and tagged, and have not changed since. A validator checks every case against the whole world.</li>
+    <li><strong>The original was measured first.</strong> Bars for the new version were written down after that and before any changed version ran.</li>
+    <li><strong>Every version runs on the same cases at the same roster sizes.</strong></li>
+    <li><strong>A second world was held back and run once at the end:</strong> 158 cases, different people, a different mix of work. Its figures are the ones in the summary.</li>
+    <li><strong>The original was run three times.</strong> Its overall rate moved 1.2 points between repeats, so later versions were run once per size and I treat a gap under 2 points as a tie.</li>
+  </ul>
+</section>
+
+<section id="original">
+  <h2>How the original performs</h2>
+  <h3>A longer list alone is not the problem</h3>
+  <p>A first sweep ran the original on about 64 cases at eight roster sizes. In this sweep a bigger roster means more unrelated people: the agents a case is about stay the same, and the rest of the list grows around them.</p>
+  <figure>
+    <h4>The original: right outcome by roster size</h4>
+    <svg viewBox="0 0 640 230" role="img" aria-label="Right outcome stays between 73 and 80 percent from 10 to 1,280 agents">
+      <g stroke="var(--rule)"><line x1="56" x2="620" y1="30" y2="30"/><line x1="56" x2="620" y1="75" y2="75"/><line x1="56" x2="620" y1="120" y2="120"/><line x1="56" x2="620" y1="165" y2="165"/></g>
+      <g text-anchor="end"><text x="48" y="34">100%</text><text x="48" y="79">75%</text><text x="48" y="124">50%</text><text x="48" y="169">25%</text></g>
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="80,78.6 153,78.6 226,69.6 299,66 372,75 445,71.4 518,71.4 591,67.8"/>
+      <g fill="var(--accent)"><circle cx="80" cy="78.6" r="4"/><circle cx="153" cy="78.6" r="4"/><circle cx="226" cy="69.6" r="4"/><circle cx="299" cy="66" r="4"/><circle cx="372" cy="75" r="4"/><circle cx="445" cy="71.4" r="4"/><circle cx="518" cy="71.4" r="4"/><circle cx="591" cy="67.8" r="4"/></g>
+      <g text-anchor="middle" class="ink"><text x="80" y="64" class="ink">73%</text><text x="153" y="64" class="ink">73%</text><text x="226" y="56" class="ink">78%</text><text x="299" y="52" class="ink">80%</text><text x="372" y="61" class="ink">75%</text><text x="445" y="57" class="ink">77%</text><text x="518" y="57" class="ink">77%</text><text x="591" y="54" class="ink">79%</text></g>
+      <g text-anchor="middle"><text x="80" y="192">10</text><text x="153" y="192">20</text><text x="226" y="192">40</text><text x="299" y="192">80</text><text x="372" y="192">160</text><text x="445" y="192">320</text><text x="518" y="192">640</text><text x="591" y="192">1,280</text><text x="335" y="216">agents in the roster</text></g>
+    </svg>
+    <figcaption>Tokens per message over the same range: 11,900 at 10 agents, 69,500 at 1,280. This sweep ran before the test set was frozen, on an earlier draw of the cases, so its percentages are not comparable with the tables below. Its point is the shape.</figcaption>
+  </figure>
+  <p>Finding a named person in 1,280 names is easy for this model. The mistakes come from the two or three agents that could fit, and they are there at every size.</p>
+  <h3>What it gets wrong</h3>
+  <p>The full baseline ran all 448 cases at three roster sizes, three times each.</p>
+  <ul>
+    <li><strong>It doesn't ask.</strong> About 200 of 1,218 runs at each size are a question it should have asked and didn't. In most of those it picks one of the options. In about a quarter it sends the work to every option at once.</li>
+    <li><strong>A contact with no agent is invisible to it.</strong> "Send Omar my new phone number", when one Omar has an agent and another is only a contact, was handled correctly in 0 of 270 runs. It usually went to the Omar with an agent.</li>
+    <li><strong>Roster size changes which mistake it makes.</strong> With few agents it reuses too readily. With many it creates too readily: duplicates rise from 1.5% to 3.9%.</li>
+    <li><strong>One situation does degrade with size.</strong> "Ask the adjuster where Anton's claim stands" reaches Anton's claim agent 92% of the time at 20 agents and 39% at 640.</li>
+  </ul>
+
+  <h3>Why size was flat, and what I tested next</h3>
+  <p>I had expected the original to get worse with more agents. The cause of the flat line was in my own test. A bigger roster only added filler: unrelated people who share no name with anyone in a message. The situations that cause mistakes, two people with one first name or one person with two pieces of work, were the same at 10 agents and at 1,280. The roster was getting longer without getting any more confusing.</p>
+  <p>In real use, more agents also means more people sharing a name, and more work piling up for the people you already deal with. So I added two tests, keeping the same 448 cases and their right answers.</p>
+  <ol>
+    <li><strong>More people with the same name.</strong> Ten extra people for each first name in a case. "Ask Felix about the missed premium payment" now ran with twelve people called Felix instead of two. The effect on the original was small: about 3 points on routing.</li>
+    <li><strong>More work for the same person as well.</strong> A crowded roster: still 160 agents, with each person in a case holding six more pieces of work and having ten namesakes. None of it is about the same kind of thing as the message.</li>
+  </ol>
+  <div class="scroll"><table>
+    <thead><tr><th>The original at 160 agents</th><th class="n">Normal roster</th><th class="n">Crowded roster</th></tr></thead>
+    <tbody>
+      <tr><td>Creates a duplicate agent</td><td class="n">3.2%</td><td class="n">7.4%</td></tr>
+      <tr><td>Right on the turn after the user answers a question</td><td class="n">83%</td><td class="n">59%</td></tr>
+      <tr><td>Asks when it should</td><td class="n">35%</td><td class="n">83%</td></tr>
+    </tbody>
+  </table></div>
+  <p>This is where the original changes. It creates more than twice the duplicates and handles the user's answer much worse. It also asks more, because eight agents for one person in the list make the ambiguity visible. So the number of agents does not hurt on its own. Many agents for the same few people does.</p>
+  <p class="callout"><strong>This is one model.</strong> Everything here ran on Claude Haiku 5.5, which reads a very long prompt without losing track of what is in it. The flat line shows that this model's attention isn't diluted by 1,280 names. It doesn't show that the original design is safe at that size: an older or smaller model may well get worse as the list grows, which is what the project's own write-up expected. I did not test another model.</p>
+</section>
+
+<section id="built">
+  <h2>What I built</h2>
+  <h3>The approach</h3>
+  <p>The baseline pointed at two possible causes. Either the orchestrator is told the wrong thing (its prompt forbids questions and pushes it to reuse), or it is shown the wrong thing (bare names, and nothing about who each agent works for). If neither was enough, the remaining option was to take the decision to ask away from it.</p>
+  <p>I did not want to pick one and argue for it. I laid the options out from cheapest to most involved, built each as a configuration behind a switch in the same code, and ran every one on the same cases. Each adds one idea to the one before, so a difference in the results can be put down to that idea. The seven configurations are numbered below, and the results use the same numbers.</p>
+
+  <div class="cfg" id="c0">
+    <h3><span class="num">0</span>The original</h3>
+    <dl>
+      <dt>What it is</dt><dd>The app as it came. Every agent's name in the prompt, hand-off by name, the original instructions.</dd>
+      <dt>Why it is here</dt><dd>The numbers to beat. It runs on the same code as everything else, with the new parts switched off.</dd>
+    </dl>
+  </div>
+
+  <div class="cfg" id="c1">
+    <h3><span class="num">1</span>The prompt rewritten</h3>
+    <dl>
+      <dt>What it is</dt><dd>Configuration 0 with only the orchestrator's instructions changed. It still sees every name and nothing else.</dd>
+      <dt>How it is built</dt><dd>Four edits to the prompt. "Always assume you are capable" and "never ask" become: you may ask one short question when you can't tell who or what is meant. "Always prefer an existing agent, even if the name is unrelated" becomes: reuse an agent only to continue its piece of work. "Always use the execution agents" becomes: chat and general questions need no agent. A tool the prompt names and that does not exist is removed.</dd>
+      <dt>Why I tested it</dt><dd>It is a text edit with no new code. If it had been enough, nothing else here would have been worth building.</dd>
+    </dl>
+  </div>
+
+  <div class="cfg" id="c2">
+    <h3><span class="num">2</span>A lookup over a description of each agent</h3>
+    <dl>
+      <dt>What it is</dt><dd>Each agent keeps a title and one line of description, such as "missed payment (annual premium); with Pavel Pellegrino". Before the orchestrator runs, code searches those descriptions and shows it about ten candidates in place of every name.</dd>
+      <dt>How it is built</dt><dd>The lookup takes the agents used in the last three hand-offs, then adds the agents whose title or description shares words with the message, by keyword search. It makes no model call. The orchestrator hands off by agent id, and creating an agent is a separate tool.</dd>
+      <dt>Why I tested it</dt><dd>It is the simplest version of a lookup: nothing to keep up to date beyond one line per agent. It tests whether a short list alone is the fix, before adding anything heavier.</dd>
+    </dl>
+  </div>
+
+  <div class="cfg" id="c3">
+    <h3><span class="num">3</span>A lookup over a work record of each agent</h3>
+    <dl>
+      <dt>What it is</dt><dd>Configuration 2, with more kept about each agent: the people it has written to, by email address; its threads; what it searched for. There is also a table of the user's contacts. The orchestrator is shown the candidates and the people the message's names matched, and is free to route, create or ask.</dd>
+      <dt>How it is built</dt><dd>The record is filled in from the arguments of the agent's own tool calls, and only from what it acted on. The lookup matches the names in the message against the people on records and in the contacts, as well as searching by keyword. The parts are described under <a href="#parts">The parts in detail</a>.</dd>
+      <dt>Why I tested it</dt><dd>A description names a person. It cannot tell two people with one name apart, and it knows nothing of a person who has no agent yet. A record keyed on email address and a contacts table can.</dd>
+    </dl>
+  </div>
+
+  <p>Configurations 4, 5 and 6 all start from configuration 3. Each is a stronger way of making the orchestrator ask when it should.</p>
+
+  <div class="cfg" id="c4">
+    <h3><span class="num">4</span>Required to ask, by a rule in the prompt</h3>
+    <dl>
+      <dt>What it is</dt><dd>Configuration 3 with one firm instruction added.</dd>
+      <dt>How it is built</dt><dd>One line in the prompt, marked as important: if more than one candidate could be the one the user means, and the message doesn't settle it, do not pick one and do not send it to several. Ask one short question that names the options and offers "something new", then stop. Nothing in code checks that it does.</dd>
+      <dt>Why I tested it</dt><dd>Configuration 3 only permits a question. This is the cheapest way to push harder. If a sentence could do it, no machinery would be needed.</dd>
+    </dl>
+  </div>
+
+  <div class="cfg" id="c5">
+    <h3><span class="num">5</span>Code decides when to ask</h3>
+    <dl>
+      <dt>What it is</dt><dd>Configuration 3 with a step in code, before the orchestrator runs, that decides whether to route, create or ask. The orchestrator can only carry out that decision.</dd>
+      <dt>How it is built</dt><dd>The code groups the people the message names. A full name is one person; a first name is everyone who has it. For each group, the options are those people's agents, plus any of them who has no agent. Each option has a score for how well its record matches the words of the message. If the best score beats the next by a set margin, the code approves that one agent. If not, the words have not settled it, and the code calls for a question listing the options. One named person with no agent means create. If the message names nobody, the code decides nothing and the orchestrator chooses as in configuration 3.<br><br>The decision is enforced, not suggested. The hand-off tool only accepts the agents the code approved for that message and refuses any other, and when the decision is to ask, no hand-off or create tool is offered at all.</dd>
+      <dt>Why I tested it</dt><dd>A prompt is a request and can be ignored. This cannot be. It adds no model call, gives the same answer every time, and every branch can be unit tested. Its known weakness going in: it compares words, not meaning.</dd>
+    </dl>
+  </div>
+
+  <div class="cfg" id="c6">
+    <h3><span class="num">6</span>A second model call decides when to ask</h3>
+    <dl>
+      <dt>What it is</dt><dd>Configuration 5 with the scoring done by a model in place of keyword matching. One extra model call per message.</dd>
+      <dt>How it is built</dt><dd>Before the orchestrator runs, a separate call is given the recent chat, the message, the candidates and the matched contacts. It does not choose an agent. It says whether the message is chat or work, lists the tasks in it, and gives every candidate one of four labels for each task: <em>exact</em> (this continues that agent's work), <em>plausible</em> (it could be, and the message doesn't say enough), <em>same person, other work</em>, or <em>unrelated</em>. Its output is forced into a fixed shape and it runs at temperature zero, so code can read it.<br><br>Code then counts the labels. One exact and nothing plausible in the way: route. More than one exact, or something plausible: ask, with those as the options. Nothing that fits: create. Chat: no agent. As in configuration 5, the tools enforce the result. If the call's output is unusable twice, the orchestrator chooses as in configuration 3.</dd>
+      <dt>Why I tested it</dt><dd>Code cannot read meaning: "tell Colin the medication is running out" is plainly about a vet visit and shares no word with it. A model can. And judging each candidate on its own, instead of asking for one pick, lets two both come back "plausible", which is what should trigger a question. The fourth label exists so that "it is Tessa, and it isn't about her claim" counts as an answer and not as a doubt. This is the configuration I expected to win.</dd>
+    </dl>
+  </div>
+
+  <h3 id="parts">The parts in detail</h3>
+  <p>Configurations 2 to 6 share a lookup and a changed orchestrator. Configurations 3 to 6 share the work record and the contacts.</p>
+  <figure>
+    <h4>How the new version chooses an agent</h4>
+    <div class="flow">
+      <div class="box"><b>User message</b></div>
+      <span class="arrow">→</span>
+      <div class="box key"><b>Lookup</b><small>code, no model call. Gathers the recently used agents, the agents for anyone the message names, and the agents whose record matches the topic.</small></div>
+      <span class="arrow">→</span>
+      <div class="box key"><b>Orchestrator</b><small>sees about ten candidates, each with who it has dealt with and what it is about, plus the contacts the names matched</small></div>
+      <span class="arrow">→</span>
+      <div class="box"><b>One of three</b><small>hand off to a candidate by id · create a new agent · ask the user</small></div>
+    </div>
+  </figure>
+  <h4 style="margin:6px 0 0;font-family:var(--sans);font-size:16px">The work record</h4>
+  <div class="scroll"><table>
+    <thead><tr><th>Choice</th><th>What I chose</th><th>What I chose it over, and why</th></tr></thead>
+    <tbody>
+      <tr><td>Where the facts come from</td><td>The arguments of the agent's own tool calls</td><td>Reading them out of the agent's log with a model. A reply call already carries the thread id and the address, so copying them is exact and free.</td></tr>
+      <tr><td>What goes on the record</td><td>Only what the agent acted on. A search keeps the query, not the results.</td><td>Everything it saw. An agent that once searched the whole inbox would then match every name in it.</td></tr>
+      <tr><td>Who a person is</td><td>An email address</td><td>A name. Two people called Omar are two people.</td></tr>
+      <tr><td>Where it is stored</td><td>SQLite, beside the app's other data</td><td>The original's JSON file, which can empty itself, or a vector database, which nothing here needs. SQLite is already in the app, writes safely and has keyword search built in.</td></tr>
+    </tbody>
+  </table></div>
+  <h4 style="margin:6px 0 0;font-family:var(--sans);font-size:16px">The lookup's four sources</h4>
+  <div class="scroll"><table>
+    <thead><tr><th>Source</th><th>What it adds</th><th>Why it is there</th></tr></thead>
+    <tbody>
+      <tr><td>Recently used</td><td>The agents in the last three hand-offs, always included</td><td>"Ok send that" names nobody and has no topic words. The only clue is which agent was just used.</td></tr>
+      <tr><td>People <span class="note">(3 to 6)</span></td><td>Agents that have dealt with anyone the message names. A full name shuts out people who only share the first name.</td><td>A name is an exact thing to match, and it finds the agent even when the topic is worded differently.</td></tr>
+      <tr><td>Topic</td><td>Agents whose record or description shares words with the message</td><td>For a request with no name.</td></tr>
+      <tr><td>Last shown</td><td>When the message names nobody: who was named in the last thing the user was shown</td><td>"Reply to that", after an email alert. Added after the first lookup test found the right agent in 0 of 12 such cases.</td></tr>
+    </tbody>
+  </table></div>
+  <h4 style="margin:6px 0 0;font-family:var(--sans);font-size:16px">The people the names matched <span class="note">(3 to 6)</span></h4>
+  <p>Alongside the candidates, the lookup returns every person the user knows whose name is in the message, including people with no agent yet.</p>
+  <figure>
+    <h4>"send Omar my new phone number"</h4>
+    <div class="two">
+      <div class="box" style="border:1px solid var(--rule);background:var(--tint);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:14.5px"><b>What the original sees</b><span>Agent names only. One contains "Omar":</span><code>Omar Ivanov jewellery rider</code><small style="color:var(--muted)">To the original, there is one Omar. It sends him the number.</small></div>
+      <div class="box" style="border:1px solid var(--accent);background:var(--surface);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:14.5px"><b>What the new version sees</b><span>One candidate agent, and two matched people:</span><code>Omar Ivanov: has 1 agent</code><code>Omar Kaur: no agent yet</code><small style="color:var(--muted)">Two people fit, so it asks which Omar.</small></div>
+    </div>
+    <figcaption>The original handled this kind of message correctly in 0 of 270 runs. It is not choosing badly between two people. It never sees the second one.</figcaption>
+  </figure>
+  <h4 style="margin:6px 0 0;font-family:var(--sans);font-size:16px">The orchestrator</h4>
+  <ul>
+    <li><strong>It hands off by agent id, and only to a candidate.</strong> In the original, a name that doesn't match exactly creates a new agent, so a typo and an intention look the same.</li>
+    <li><strong>Creating an agent is a separate tool,</strong> with a check for work that already has one.</li>
+    <li><strong>Every hand-off is written to the conversation log.</strong> The original kept no record of who it had sent what to. The "recently used" source reads these entries.</li>
+  </ul>
+</section>
+
+<section id="results">
+  <h2>Results for every configuration</h2>
+  <p>All seven configurations on the same 448 cases, on the world I built and tuned on. Click a number to see what that configuration is.</p>
+  <figure>
+    <h4>Right outcome, 160 agents</h4>
+    <div class="hbars">
+      <span><a class="cref" href="#c0"><span class="num">0</span> Original</a></span><div class="track"><div class="fill" style="width:78%"></div></div><span class="val">78%</span>
+      <span><a class="cref" href="#c1"><span class="num">1</span> Prompt rewritten</a></span><div class="track"><div class="fill" style="width:81%"></div></div><span class="val">81%</span>
+      <span><a class="cref" href="#c2"><span class="num">2</span> Lookup over a description</a></span><div class="track"><div class="fill" style="width:86%"></div></div><span class="val">86%</span>
+      <span><a class="cref" href="#c3"><span class="num">3</span> Lookup over a work record</a></span><div class="track"><div class="fill pick" style="width:97%"></div></div><span class="val">97%</span>
+      <span><a class="cref" href="#c4"><span class="num">4</span> …required to ask</a></span><div class="track"><div class="fill" style="width:94%"></div></div><span class="val">94%</span>
+      <span><a class="cref" href="#c5"><span class="num">5</span> …code decides</a></span><div class="track"><div class="fill" style="width:90%"></div></div><span class="val">90%</span>
+      <span><a class="cref" href="#c6"><span class="num">6</span> …second model call decides</a></span><div class="track"><div class="fill" style="width:93%"></div></div><span class="val">93%</span>
+    </div>
+    <figcaption>The share of messages handled correctly: routed to the right agent, a new one created when needed, or a question asked when the message didn't say enough. A needless question counts as wrong.</figcaption>
+  </figure>
+
+  <h3>The full picture at 160 agents</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Configuration</th><th class="n">Right</th><th class="n">Asks when it should</th><th class="n">Asks when it shouldn't</th><th class="n">Right after the user answers</th><th class="n">Makes a duplicate</th><th class="n">Tokens per message</th></tr></thead>
+    <tbody>
+      <tr><td><a class="cref" href="#c0"><span class="num">0</span> Original</a></td><td class="n">78%</td><td class="n">35%</td><td class="n">1%</td><td class="n">83%</td><td class="n">3.2%</td><td class="n">18,200</td></tr>
+      <tr><td><a class="cref" href="#c1"><span class="num">1</span> Prompt rewritten</a></td><td class="n">81%</td><td class="n">67%</td><td class="n">3%</td><td class="n">80%</td><td class="n">7.4%</td><td class="n">15,600</td></tr>
+      <tr><td><a class="cref" href="#c2"><span class="num">2</span> Lookup over a description</a></td><td class="n">86%</td><td class="n">74%</td><td class="n">3%</td><td class="n">84%</td><td class="n">2.5%</td><td class="n">10,700</td></tr>
+      <tr class="pick"><td><a class="cref" href="#c3"><span class="num">3</span> Lookup over a work record</a></td><td class="n">97%</td><td class="n">100%</td><td class="n">3%</td><td class="n">85%</td><td class="n">0.7%</td><td class="n">11,000</td></tr>
+      <tr><td><a class="cref" href="#c4"><span class="num">4</span> …required to ask</a></td><td class="n">94%</td><td class="n">100%</td><td class="n">7%</td><td class="n">88%</td><td class="n">0.7%</td><td class="n">11,200</td></tr>
+      <tr><td><a class="cref" href="#c5"><span class="num">5</span> …code decides</a></td><td class="n">90%</td><td class="n">96%</td><td class="n">12%</td><td class="n">77%</td><td class="n">0.2%</td><td class="n">11,300</td></tr>
+      <tr><td><a class="cref" href="#c6"><span class="num">6</span> …second model call decides</a></td><td class="n">93%</td><td class="n">100%</td><td class="n">9%</td><td class="n">90%</td><td class="n">1.2%</td><td class="n">13,700</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><strong>Asks when it should:</strong> of the messages where a question was the right move, how often it asked.</li>
+    <li><strong>Asks when it shouldn't:</strong> of the messages with a clear answer, how often it asked anyway. Lower is better.</li>
+    <li><strong>Right after the user answers:</strong> when it asked and the user replied, how often the next turn did the right thing.</li>
+  </ul>
+
+  <h3>As the roster grows, and when it is crowded</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Right outcome</th><th class="n">20 agents</th><th class="n">160 agents</th><th class="n">640 agents</th><th class="n">160 agents, crowded</th></tr></thead>
+    <tbody>
+      <tr><td><a class="cref" href="#c0"><span class="num">0</span> Original</a></td><td class="n">81%</td><td class="n">78%</td><td class="n">77%</td><td class="n">83%</td></tr>
+      <tr><td><a class="cref" href="#c1"><span class="num">1</span> Prompt rewritten</a></td><td class="n">81%</td><td class="n">81%</td><td class="n">81%</td><td class="n">83%</td></tr>
+      <tr><td><a class="cref" href="#c2"><span class="num">2</span> Lookup over a description</a></td><td class="n">87%</td><td class="n">86%</td><td class="n">85%</td><td class="n">89%</td></tr>
+      <tr class="pick"><td><a class="cref" href="#c3"><span class="num">3</span> Lookup over a work record</a></td><td class="n">96%</td><td class="n">97%</td><td class="n">95%</td><td class="n">95%</td></tr>
+      <tr><td><a class="cref" href="#c4"><span class="num">4</span> …required to ask</a></td><td class="n">94%</td><td class="n">94%</td><td class="n">91%</td><td class="n">91%</td></tr>
+      <tr><td><a class="cref" href="#c5"><span class="num">5</span> …code decides</a></td><td class="n">91%</td><td class="n">90%</td><td class="n">91%</td><td class="n">85%</td></tr>
+      <tr><td><a class="cref" href="#c6"><span class="num">6</span> …second model call decides</a></td><td class="n">94%</td><td class="n">93%</td><td class="n">93%</td><td class="n">94%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The crowded roster is the one from <a href="#original">How the original performs</a>: each person in a case has six more pieces of work and ten namesakes. It is graded with two allowances: a question there need not list every option, and corrections are left out, because "no, the other Gustavo" has no single answer when there are eleven. Under the normal rules, configuration 0 scores 68% there and configuration 3 scores 85%.</p>
+
+  <h3>What each configuration showed</h3>
+  <ul>
+    <li><strong><a class="cref" href="#c1"><span class="num">1</span> The prompt rewritten</a> does nothing overall.</strong> It asks more often and is no better. With only names to go on, "new work gets a new agent" makes it start fresh too often: duplicates more than double.</li>
+    <li><strong><a class="cref" href="#c2"><span class="num">2</span> A lookup over a description</a> gets most of the way, and falls short in two places.</strong> Its lookup finds the right agent as often as configuration 3's, and it asks needless questions just as rarely. But it never asks about a contact who has no agent, because it has no contacts to see: 0% on those messages, against 100%. And it sends "ask the adjuster where Anton's claim stands" to the right agent 31% of the time, against 100%: a work record shows that the adjuster was copied on Anton's claim, and a one-line description does not. It also makes two to three times as many duplicates.</li>
+    <li><strong><a class="cref" href="#c3"><span class="num">3</span> A lookup over a work record</a> fixes most of it.</strong> Once the orchestrator can see who each candidate works for, and that a name fits two people, it asks every time it should, without being forced to.</li>
+    <li><strong><a class="cref" href="#c4"><span class="num">4</span> Requiring it to ask</a> adds needless questions and no correct ones.</strong> It takes "more than one candidate could fit" too broadly, and asks about new people and about requests the topic already settles.</li>
+    <li><strong><a class="cref" href="#c5"><span class="num">5</span> Letting code decide</a> asks the most needless questions.</strong> It cannot read meaning. "Tell Caleb we want the new seats live on Monday" shares no word with his subscription record, so it calls a tie and asks. It also handles the user's answer worst, because a short answer has few words to match.</li>
+    <li><strong><a class="cref" href="#c6"><span class="num">6</span> A second model call</a> ties configuration 3 overall, and is better on the turn after the user answers.</strong> It asks more needless questions, partly from a flaw found afterwards: it sometimes asks "which one?" when there is only one option. It costs one more model call on every message.</li>
+  </ul>
+
+  <h3>Which one I chose</h3>
+  <p>The original was run three times, and its overall rate moved 1.2 points between repeats. So I treat a gap under 2 points as a tie, and where two configurations tie, the simpler one wins.</p>
+  <p><strong>I chose configuration 3.</strong> It is best or tied on the overall rate at every roster size, it asks needless questions as rarely as any configuration with a lookup, and it needs no extra model call.</p>
+  <ul>
+    <li><strong>Against configuration 2, the simpler one:</strong> 9 to 11 points better. The work record and the contacts earn their place, and the gain is in specific places: people with no agent yet, a go-between copied on someone else's work, and fewer duplicates. Leaving out the messages about a contact with no agent, the gap is 1 to 4 points (94 / 93 / 91% against 95 / 96 / 95%), so most of what the record buys is the contacts.</li>
+    <li><strong>Against configuration 6, the most involved one:</strong> a tie. Configuration 6 is better at handling the user's answer, at the price of a second model call on every message.</li>
+    <li><strong>Configurations 4 and 5</strong> are worse on every count.</li>
+  </ul>
+  <p class="callout">Once the orchestrator can see the candidates, it already asks every time it should. The problem was not that the model wouldn't ask. The original gave it nothing to go on. Each stronger push to ask added questions that weren't needed.</p>
+  <p>Configurations 4, 5 and 6 are still in the code, switched off, so these runs can be reproduced.</p>
+</section>
+
+<section id="chosen">
+  <h2>The chosen configuration, in detail</h2>
+  <p>Everything in this section is configuration 3, a lookup over a work record, against configuration 0, the original.</p>
+  <h3>On a world it was not tuned on</h3>
+  <p>The results above are from the world I built and tuned on. A second world, with different people and a different mix of work, was held back and run once after the choice was made: 158 cases, of which 143 are scored. These are the figures in the summary. The chosen configuration scores 3 to 6 points lower here than on the first world, so these are the ones to rely on.</p>
+  <figure>
+    <h4>What happened to each message, 160 agents</h4>
+    <div class="bars">
+      <span>Original</span>
+      <div class="bar" role="img" aria-label="Original: 78 percent right, 15 percent acted when it should have asked, 4 percent duplicate, 3 percent other">
+        <span class="s-right" style="flex:78.3">78%</span><span class="s-missed" style="flex:14.7">15%</span><span class="s-dup" style="flex:4.2"></span><span class="s-other" style="flex:2.8"></span></div>
+      <span>Configuration 3</span>
+      <div class="bar" role="img" aria-label="Configuration 3: 92 percent right, 5 percent asked when it didn't need to, 2 percent duplicate, 1 percent acted when it should have asked, 1 percent other">
+        <span class="s-right" style="flex:91.6">92%</span><span class="s-missed" style="flex:0.7"></span><span class="s-need" style="flex:4.9">5%</span><span class="s-dup" style="flex:2.1"></span><span class="s-other" style="flex:0.7"></span></div>
+    </div>
+    <div class="legend"><span><i class="s-right"></i>Right</span><span><i class="s-missed"></i>Acted when it should have asked</span><span><i class="s-need"></i>Asked when it didn't need to</span><span><i class="s-dup"></i>Made a duplicate agent</span><span><i class="s-other"></i>Other errors</span></div>
+    <figcaption>Configuration 3 trades the original's main error, acting without asking, for a smaller number of questions it didn't need to ask.</figcaption>
+  </figure>
+  <div class="scroll"><table>
+    <thead><tr><th></th><th class="n">20 agents</th><th class="n">160 agents</th><th class="n">640 agents</th></tr></thead>
+    <tbody>
+      <tr><td>Original, right</td><td class="n">78%</td><td class="n">78%</td><td class="n">74%</td></tr>
+      <tr class="pick"><td>Configuration 3, right</td><td class="n">90%</td><td class="n">92%</td><td class="n">92%</td></tr>
+      <tr><td>Original, asks when it should</td><td class="n">47%</td><td class="n">42%</td><td class="n">33%</td></tr>
+      <tr><td>Configuration 3, asks when it should</td><td class="n">92%</td><td class="n">97%</td><td class="n">97%</td></tr>
+      <tr><td>Original, asks when it shouldn't</td><td class="n">2%</td><td class="n">0%</td><td class="n">1%</td></tr>
+      <tr><td>Configuration 3, asks when it shouldn't</td><td class="n">7%</td><td class="n">7%</td><td class="n">7%</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Cost</h3>
+  <figure>
+    <h4>Tokens per message by roster size, held-out world</h4>
+    <svg viewBox="0 0 640 270" role="img" aria-label="The original rises from 11,400 tokens at 20 agents to 39,700 at 640. Configuration 3 stays near 10,500.">
+      <g stroke="var(--rule)"><line x1="70" x2="500" y1="30" y2="30"/><line x1="70" x2="500" y1="78" y2="78"/><line x1="70" x2="500" y1="126" y2="126"/><line x1="70" x2="500" y1="174" y2="174"/><line x1="70" x2="500" y1="222" y2="222"/></g>
+      <g text-anchor="end"><text x="62" y="34">40,000</text><text x="62" y="82">30,000</text><text x="62" y="130">20,000</text><text x="62" y="178">10,000</text><text x="62" y="226">0</text></g>
+      <polyline fill="none" stroke="var(--other)" stroke-width="2.5" points="90,167.5 285,137.3 480,31.4"/>
+      <g fill="var(--other)"><circle cx="90" cy="167.5" r="4"/><circle cx="285" cy="137.3" r="4"/><circle cx="480" cy="31.4" r="4"/></g>
+      <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="90,172.4 285,171.8 480,170.7"/>
+      <g fill="var(--accent)"><circle cx="90" cy="172.4" r="4"/><circle cx="285" cy="171.8" r="4"/><circle cx="480" cy="170.7" r="4"/></g>
+      <g text-anchor="middle"><text x="90" y="155">11,400</text><text x="285" y="125">17,700</text><text x="468" y="20">39,700</text>
+        <text x="90" y="192" class="ink">10,300</text><text x="285" y="192" class="ink">10,500</text><text x="480" y="192" class="ink">10,700</text>
+        <text x="90" y="246">20 agents</text><text x="285" y="246">160 agents</text><text x="480" y="246">640 agents</text></g>
+      <text x="512" y="35" style="font-weight:600">Original</text><text x="512" y="175" class="ink" style="font-weight:600">Configuration 3</text>
+    </svg>
+    <figcaption>In dollars configuration 3 costs slightly more per message at 20 agents ($0.0008 against $0.0005), about the same at 160, and a third as much at 640 ($0.0008 against $0.0023).</figcaption>
+  </figure>
+
+  <h3>Where the gain comes from, and where it loses</h3>
+  <p>By kind of message, pooled over the three sizes. Each kind has only 4 to 12 cases on this world, so single rows are noisy. The pattern is what matters.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Kind of message</th><th class="n">Original</th><th class="n">New</th><th class="n">Change</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>A person with an agent, or a contact with none</td><td class="n">0%</td><td class="n">88%</td><td class="n">+88</td><td><div class="delta"><span></span><span class="pos axis" style="width:100%"></span></div></td></tr>
+      <tr><td>Same person, vague ("nudge Tessa")</td><td class="n">47%</td><td class="n">97%</td><td class="n">+50</td><td><div class="delta"><span></span><span class="pos axis" style="width:57%"></span></div></td></tr>
+      <tr><td>Same first name, nothing settles it</td><td class="n">53%</td><td class="n">100%</td><td class="n">+47</td><td><div class="delta"><span></span><span class="pos axis" style="width:53%"></span></div></td></tr>
+      <tr><td>Shared contact (the adjuster)</td><td class="n">58%</td><td class="n">100%</td><td class="n">+42</td><td><div class="delta"><span></span><span class="pos axis" style="width:48%"></span></div></td></tr>
+      <tr><td>Correction ("no, the other one")</td><td class="n">47%</td><td class="n">80%</td><td class="n">+33</td><td><div class="delta"><span></span><span class="pos axis" style="width:38%"></span></div></td></tr>
+      <tr><td>Same person, two pieces of work, topic named</td><td class="n">81%</td><td class="n">97%</td><td class="n">+17</td><td><div class="delta"><span></span><span class="pos axis" style="width:19%"></span></div></td></tr>
+      <tr><td>Known first name, different person</td><td class="n">91%</td><td class="n">100%</td><td class="n">+9</td><td><div class="delta"><span></span><span class="pos axis" style="width:10%"></span></div></td></tr>
+      <tr><td>Follow-up on an email alert</td><td class="n">92%</td><td class="n">100%</td><td class="n">+8</td><td><div class="delta"><span></span><span class="pos axis" style="width:9%"></span></div></td></tr>
+      <tr><td>Messy text, different wording, chat, after a question</td><td class="n">80–100%</td><td class="n">same</td><td class="n">0</td><td><div class="delta"><span></span><span class="axis"></span></div></td></tr>
+      <tr><td>Brand-new person</td><td class="n">87%</td><td class="n">80%</td><td class="n">−7</td><td><div class="delta"><span class="neg" style="width:8%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Topic switch</td><td class="n">92%</td><td class="n">83%</td><td class="n">−8</td><td><div class="delta"><span class="neg" style="width:9%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Inbox-scanner trap</td><td class="n">100%</td><td class="n">92%</td><td class="n">−8</td><td><div class="delta"><span class="neg" style="width:9%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Clear follow-up</td><td class="n">100%</td><td class="n">88%</td><td class="n">−12</td><td><div class="delta"><span class="neg" style="width:14%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Follow-up after a gap</td><td class="n">100%</td><td class="n">87%</td><td class="n">−13</td><td><div class="delta"><span class="neg" style="width:15%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Pronoun follow-up ("ok send that")</td><td class="n">100%</td><td class="n">83%</td><td class="n">−17</td><td><div class="delta"><span class="neg" style="width:19%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Two tasks in one message</td><td class="n">100%</td><td class="n">80%</td><td class="n">−20</td><td><div class="delta"><span class="neg" style="width:23%"></span><span class="axis"></span></div></td></tr>
+      <tr><td>Same first name, topic settles it</td><td class="n">100%</td><td class="n">78%</td><td class="n">−22</td><td><div class="delta"><span class="neg" style="width:25%"></span><span class="axis"></span></div></td></tr>
+    </tbody>
+  </table></div>
+  <p>The original acts without asking, so it is right on clear messages and wrong on unclear ones. Configuration 3 asks more readily, so it is right on unclear ones and sometimes over-cautious on clear ones. Nearly every loss in the lower half of the table is a question that wasn't needed, not work sent to the wrong place.</p>
+  <p class="callout">The top row is a category the original cannot pass, because it has no way to see a contact who has no agent. Leaving it out, the comparison is 85 / 85 / 80% for the original against 91 / 92 / 92%.</p>
+
+  <h3>The bars I set beforehand</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Bar</th><th>Result at 20 / 160 / 640 agents</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Right, 88% or more</td><td>90 / 92 / 92%</td><td class="met">met</td></tr>
+      <tr><td>Asks when it should, 80% or more</td><td>92 / 97 / 97%</td><td class="met">met</td></tr>
+      <tr><td>Reaches the wrong person on the first turn, 1% or less</td><td>0%</td><td class="met">met</td></tr>
+      <tr><td>640 agents within 3 points of 20</td><td>2 points higher</td><td class="met">met</td></tr>
+      <tr><td>Tokens per message, 15,000 or less</td><td>about 10,500</td><td class="met">met</td></tr>
+      <tr><td>Asks when it shouldn't, 5% or less</td><td>7%</td><td class="miss">missed</td></tr>
+      <tr><td>Right on the turn after the user answers, 85% or more</td><td>88 / 82 / 78%</td><td class="miss">missed at two sizes</td></tr>
+      <tr><td>Duplicates, 1% or less</td><td>1.4 / 2.1 / 1.4%</td><td class="miss">missed</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>On the wrong-person bar:</strong> on the first turn, no run of configuration 3 handed work to an agent belonging to someone else. On the turn after the user answers a question, it did so once in 90 runs at 20 agents and not at the other sizes.</p>
+  <p><strong>On the turn after the user answers:</strong> the original scores 80 / 84 / 89% there, on the far fewer occasions when it asks at all (35 to 50 runs, against 90 to 95). Configuration 3 gets worse on this step as the roster grows.</p>
+
+  <h3>On the crowded roster</h3>
+  
+  <div class="scroll"><table>
+    <thead><tr><th>First world, 160 agents</th><th class="n">Normal roster</th><th class="n">Crowded roster</th></tr></thead>
+    <tbody>
+      <tr><td>Original: creates a duplicate</td><td class="n">3.2%</td><td class="n">7.4%</td></tr>
+      <tr><td>Configuration 3: creates a duplicate</td><td class="n">0.7%</td><td class="n">0.5%</td></tr>
+      <tr><td>Original: right on the turn after the user answers</td><td class="n">83%</td><td class="n">59%</td></tr>
+      <tr><td>Configuration 3: right on the turn after the user answers</td><td class="n">85%</td><td class="n">73%</td></tr>
+      <tr><td>Configuration 3: asks when it shouldn't</td><td class="n">3%</td><td class="n">6%</td></tr>
+    </tbody>
+  </table></div>
+  <p>Configuration 3 holds up better: it does not create more duplicates under crowding. For every configuration, the turn after the user answers is what suffers most.</p>
+  <p>The overall rate under crowding depends on how a question is graded. A good question about eight pieces of work may not list them all, and "no, the other Gustavo" stops pointing at one person when there are eleven. With allowances for both, the original scores 83% and configuration 3 95% (91% on the held-out world). Under the same rules as the normal roster they score 68% and 85% (80% on the held-out world). Either way the gap is about the same. Of the others, configuration 6 ties it here as well (94%), configuration 2 reaches 89%, and configuration 5 falls furthest (85%).</p>
+
+  
+  <h3>On messier messages</h3>
+  <p>The main result looked high, and every case spells a name exactly as the contacts do. So after the main results I wrote 40 messages that don't: a short or misspelt name, a surname alone, no name at all. They were not used to tune anything.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Right, of the cases in each kind</th><th class="n">Original</th><th class="n">Configuration 3</th></tr></thead>
+    <tbody>
+      <tr><td>A surname alone ("ask Oduya…")</td><td class="n">3 of 6</td><td class="n">6 of 6</td></tr>
+      <tr><td>No name, only the topic</td><td class="n">2 of 10</td><td class="n">10 of 10</td></tr>
+      <tr><td>A misspelt surname</td><td class="n">6 of 6</td><td class="n">6 of 6</td></tr>
+      <tr><td>A short form of a first name ("ask Wes…")</td><td class="n">4 of 6</td><td class="n">1 of 6</td></tr>
+      <tr><td>Lowercase with a typo in the first name</td><td class="n">5 of 6</td><td class="n">3 of 6</td></tr>
+      <tr><td>Two people named, one is the recipient</td><td class="n">5 of 6</td><td class="n">2 of 6</td></tr>
+      <tr class="pick"><td>All 40</td><td class="n">25</td><td class="n">28</td></tr>
+    </tbody>
+  </table></div>
+  <p>The lookup is much better where there is no first name to match, and worse where the first name is in a form it doesn't recognise. Names are matched as whole words, so "Wes" finds nothing, where the original reads the whole list and can make the leap. That is a regression. The original reached the wrong person 6 times in these 40. Configuration 3 did not.</p>
+
+
+  <h3>A second iteration</h3>
+  <p>The chosen configuration still asks when it didn't need to, on 3 to 4% of clear messages on the first world and 7% on the held-out one. After the held-out run I went after that. Reading them suggested a cause: the lookup also returns agents that only share a topic with the message, and the orchestrator was treating them as alternatives. I changed the candidates to say how each was found, and ran it on the first world.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>First world, 20 / 160 / 640 agents</th><th class="n">First</th><th class="n">Second</th></tr></thead>
+    <tbody>
+      <tr><td>Right</td><td class="n">96 / 97 / 95%</td><td class="n">96 / 97 / 97%</td></tr>
+      <tr><td>Asks when it shouldn't</td><td class="n">3 / 3 / 4%</td><td class="n">4 / 3 / 3%</td></tr>
+      <tr><td>Asks when it should</td><td class="n">100 / 100 / 100%</td><td class="n">99 / 99 / 97%</td></tr>
+      <tr><td>Right on the turn after the user answers</td><td class="n">87 / 85 / 82%</td><td class="n">89 / 88 / 84%</td></tr>
+    </tbody>
+  </table></div>
+  <p>It did not reduce the needless questions, so my reading of their cause was wrong or incomplete. It is a tie overall and stays off by default. I did not re-run the held-out world with it: that world is for one run.</p>
+
+</section>
+
+<section id="gaps">
+  <h2>Other gaps</h2>
+  <p>Found while working, separate from overload.</p>
+  <h3>Fixed on this branch</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Gap</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Models hardcoded to one that is no longer served. The app could not run.</td><td>Models come from config</td></tr>
+      <tr><td>No cap on output tokens, so a request is refused outright when the account balance can't cover the model's full output limit</td><td>A default cap</td></tr>
+      <tr><td>The 4,400-token system prompt paid for in full on every call</td><td>The stable parts of the prompt are cached: 40 to 55% off the cost per message</td></tr>
+      <tr><td>Seven modules each computing their own data path</td><td>One setting</td></tr>
+      <tr><td>Two agent names could share one log file. The roster file could empty itself.</td><td>Agents have ids and live in SQLite</td></tr>
+      <tr><td>A failure left the user with no reply and the log with no detail</td><td>The user gets a reply and the log has the error</td></tr>
+      <tr><td>Hitting the step limit left the user with nothing</td><td>The user is told it stopped</td></tr>
+      <tr><td>No retries on a failed model call</td><td>Two retries on a timeout, a rate limit or a server error</td></tr>
+      <tr><td>The orchestrator's prompt names a tool that doesn't exist. The execution agent's prompt has an unfilled placeholder.</td><td>Both removed</td></tr>
+      <tr><td>An agent could lose a thread id it needs, because its log is cut short as it's written</td><td>The agent is given the people and thread ids from its work record</td></tr>
+      <tr><td>No tests</td><td>39 unit tests, the eval, and checks on every push</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Not fixed, and how I would</h3>
+  <div class="scroll"><table>
+    <thead><tr><th>Gap</th><th>What I'd do</th></tr></thead>
+    <tbody>
+      <tr><td>Reply and forward send immediately. Only a prompt line asks for confirmation. For a broker this is the one that matters most.</td><td>Make a reply a draft on the thread, and let a draft be sent only once its exact text has been shown and approved on a turn the user started</td></tr>
+      <tr><td>An agent's whole log is replayed in its prompt on every call</td><td>Replay only its last few turns, now that the facts it needs are on its record</td></tr>
+      <tr><td>The same agent can be started twice at once, by a reminder and a user request</td><td>One run per agent at a time</td></tr>
+      <tr><td>No login on the API</td><td>Out of scope here. Anyone who can reach the server can read the history.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <h3>Of the solution</h3>
+  <ul>
+    <li><strong>The contacts table and the summary line are thinner in the app than in the test.</strong> The test gives the lookup the user's address book and a clean one-line summary for every agent. In the app, a contact is learned when an agent is created for that person, and the summary is the first sentence of the agent's first instructions. Importing the address book, and keeping the summary current, are not built.</li>
+    <li><strong>It has not been run end to end against a mailbox.</strong> The eval stops at the orchestrator's decision. I ran the app itself with the new defaults on a handful of messages: it answered chat directly, and for a request it created the agent with its record and contact and handed off to it. With no Gmail account connected, the agent could go no further than reporting that.</li>
+    <li><strong>It asks when it didn't need to on 7% of clear messages,</strong> and I don't yet know why.</li>
+    <li><strong>Short forms of names find nothing,</strong> and someone merely mentioned in a message is treated like its recipient.</li>
+    <li><strong>It makes more agents, not fewer.</strong> One agent per piece of work is a choice of mine. The lookup is what keeps a larger number of agents from costing more or confusing the choice.</li>
+  </ul>
+  <h3>Of the test</h3>
+  <ul>
+    <li><strong>The test set is generated, and I chose its categories.</strong> It finds the failures I thought to look for. The 92% is what the design does when names resolve cleanly. The 40 messier messages, at 70%, are closer to an untidy inbox.</li>
+    <li><strong>The held-out world is built by the same generator as the dev world.</strong> It shows the result isn't tied to particular names or to a client-heavy mix. It does not test a different style of message.</li>
+    <li><strong>One model.</strong> The original and every version ran on Claude Haiku 5.5. The finding that roster size alone doesn't reduce accuracy may be a property of that model. On a model that handles long prompts less well, the lookup could matter for accuracy as well as for cost.</li>
+    <li><strong>One run per roster size</strong> for every version except the original on the dev world. Single categories move much more than the overall rate.</li>
+    <li><strong>Configuration 2's descriptions are better than real ones might be.</strong> The test writes each agent's one-line description, and always includes the person's full name. A description written during real use could be vaguer, which would widen the gap to the work record.</li>
+    <li><strong>"Asked" is detected simply:</strong> a reply with a question mark and no hand-off.</li>
+    <li><strong>A topic in different words with no name is untested.</strong> Every case that words a topic differently also names the person.</li>
+  </ul>
+  <h3>Grading rules I changed after reading failures</h3>
+  <p>Each applies to every version, and the saved runs were re-graded.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Change</th><th>Why</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>Two categories are reported and not scored</td><td>The original reuses an agent there because its prompt tells it to. I was scoring my own design preference.</td><td>Raised the original by 1 to 3 points</td></tr>
+      <tr><td>A correction may also contact the agent that was wrongly used</td><td>The app tells that agent to stop, which is right. It was being marked as reaching the wrong person.</td><td>Raised the original by 1 to 2 points and the new version by about 3</td></tr>
+      <tr><td>After a question about which person, a new agent for the chosen person counts</td><td>The same design choice as the first row</td><td>Raised both by about 5 points on the turn after an answer</td></tr>
+      <tr><td>On the crowded roster, a question need not list every option</td><td>A person there has up to eight pieces of work</td><td>Both figures are given above</td></tr>
+      <tr><td>On the crowded roster, corrections are left out</td><td>With eleven people of one name, "the other one" has no single answer</td><td>As above</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="next">
+  <h2>What I'd do next</h2>
+  <ol>
+    <li><strong>Find out why it asks on clear messages.</strong> Read the 7% one by one. My first explanation didn't survive a test.</li>
+    <li><strong>Import the user's contacts,</strong> and keep each agent's summary current.</li>
+    <li><strong>Use the second model call for the turn after the user answers only,</strong> where it is 5 to 10 points better, with its single-option flaw fixed.</li>
+    <li><strong>Match short forms and near-spellings of first names,</strong> and tell a recipient from someone who is only mentioned.</li>
+    <li><strong>Approval in code before a reply or a forward is sent.</strong></li>
+    <li><strong>An end-to-end run against a test mailbox.</strong></li>
+    <li><strong>Repeat the size sweep on other models,</strong> a smaller one and an older one. If their accuracy falls as the roster grows, the lookup is doing more than saving cost, and the case for it is stronger than the one made here.</li>
+    <li><strong>Test cases written by someone else,</strong> from real messages if possible.</li>
+  </ol>
+</section>
+
+<section id="reproduce">
+  <h2>Reproducing it</h2>
+  <p>None of these call a model.</p>
+<pre>python -m pytest tests -q                  # 39 tests
+shasum -a 256 -c evals/CHECKSUMS           # the worlds and cases are the frozen ones
+python -m evals.cases.validate             # every case against its world
+python -m evals.references dev             # the grader on four simple strategies
+python -m evals.report dev                 # the results tables, from the saved runs
+python -m evals.report heldout
+python -m evals.report --categories heldout
+python -m evals.offline lookup             # how often the lookup finds the right agent</pre>
+  <p>A new run needs <code>OPENROUTER_API_KEY</code>.</p>
+<pre>python -m evals.run --world dev --version v2 --sizes 20,160,640</pre>
+  <p class="note">In the code the configurations are named <code>v0</code> (0), <code>v1</code> (1), <code>v2d</code> (2), <code>v2</code> (3), <code>v3</code> (4), <code>v4</code> (5) and <code>v5</code> (6). <code>v2b</code> is the second iteration of configuration 3.</p>
+  <p class="note">The saved runs are in <code>evals/results/</code>. The test set was committed and tagged <code>cases-frozen</code> before any changed version was run. The design notes, the plan and a journal of every experiment are in <code>docs/agent-overload/</code>.</p>
+</section>
+</main>
+</div>
+</body>
+</html>
