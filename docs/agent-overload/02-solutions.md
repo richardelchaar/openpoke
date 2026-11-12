@@ -45,6 +45,7 @@ The post that introduces OpenPoke names four ideas for this problem. Where each 
 |---|---|---|
 | Leave the list, use a model with a bigger context | No | The prompt fits already. On the model I used, accuracy doesn't fall as the list grows; cost does. |
 | Put a description next to each name, still list everything | No | The prompt still grows with every agent. |
+| Search a one-line description per agent and show only a handful | Tested, not chosen | Built as V2d and run on the same cases: 86% right against 97% with the work record. It has no way to see a person with no agent, or a go-between copied on someone else's work, and it makes more duplicates. |
 | **Search a record per agent and show only a handful** | **Yes** | The prompt stops growing (11,100 tokens a message at 640 agents against 40,100), and the choice is made on what the agent did. |
 | Search by meaning (embeddings) | Not built | Names and addresses are exact matches, and the name match found the right agent in every tested case where wording differed. |
 | Group agents into a tree (per person, then per piece of work) | No | Matching on the person already groups that person's agents at lookup time. A stored tree would need maintaining. |
@@ -70,7 +71,7 @@ This is the part I most wanted evidence on, so each option was built as a versio
 | Code asks when the candidates' keyword scores don't favour one | V4 | Can't read meaning, so it asks whenever the words don't overlap. The most needless questions of all. |
 | A model call labels each candidate, and code counts the labels | V5 | Tied with V2 within one to two points, at the cost of an extra model call. Better only on the turn after the user answers. |
 
-**Decision D7:** V2, called "records and lookup" in the report. The problem was never that the model wouldn't ask. The original gave it nothing to go on: a list of names, and no sign that a second person with that name existed. Given the candidates, it asks without being forced, and forcing it only adds questions.
+**Decision D7:** V2, which is configuration 3 in the report. The problem was never that the model wouldn't ask. The original gave it nothing to go on: a list of names, and no sign that a second person with that name existed. Given the candidates, it asks without being forced, and forcing it only adds questions.
 
 ### An agent for everything (cause 6)
 
@@ -161,4 +162,5 @@ That is an argument, not a measurement. The eval reports how often each version 
 | D10 | A second world, used once, for the final result | One world, split | Shows the result isn't tied to the names and mix it was tuned on | Up front |
 | D11 | Store records in SQLite | A JSON file with a lock | The app already uses it; writes are safe; full-text search is built in | Up front |
 | D12 | Unrelated fixes go in the same pull request | A second pull request | One place to review | Up front |
+| D14 | A work record and contacts, over a one-line description per agent | A title and a description only | 9 to 11 points better on the same cases; 1 to 4 points leaving out the messages about a contact with no agent | V2d |
 | D13 | One agent per piece of work | Reuse the person's agent, as the original does | Keeps a later vague request askable | A choice; reported, not scored |

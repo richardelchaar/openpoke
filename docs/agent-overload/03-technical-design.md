@@ -23,6 +23,8 @@ The lookup runs at the top of the orchestrator's turn, before its existing loop 
 | `OPENPOKE_LOOKUP` | `none` (every name in the prompt, as the original) or `records` | `records` |
 | `OPENPOKE_PROMPT` | `v1` (the original prompt) or `v2` (the rewrite) | `v2` |
 | `OPENPOKE_DECIDER` | `orchestrator`, `told_to_ask`, `code_rule`, `judge` | `orchestrator` |
+| `OPENPOKE_RECORD` | `full` (the work record and contacts) or `description` (a title and one line per agent, nothing else) | `full` |
+| `OPENPOKE_EXPLAIN_CANDIDATES` | `0`, or `1` to tell the orchestrator how each candidate was found | `0` |
 
 Setting the first two to `none` and `v1` gives the original behaviour, which is how the baseline was measured on the same code.
 
@@ -119,9 +121,9 @@ Measured, per message, with prompt caching on for every version:
 | | 20 agents | 160 agents | 640 agents |
 |---|---|---|---|
 | Original, tokens | 11,700 | 18,200 | 40,100 |
-| Records and lookup, tokens | 10,300 | 11,000 | 11,100 |
+| Work record and lookup (V2), tokens | 10,300 | 11,000 | 11,100 |
 | Original, dollars | $0.0005 | $0.0009 | $0.0023 |
-| Records and lookup, dollars | $0.0007 | $0.0008 | $0.0008 |
+| Work record and lookup (V2), dollars | $0.0007 | $0.0008 | $0.0008 |
 
 At 20 agents the new path costs slightly more, because the candidates carry more text than 20 bare names. From 160 agents up it costs less, and it stops growing.
 

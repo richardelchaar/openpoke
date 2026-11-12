@@ -16,11 +16,13 @@ Three things are swapped out, and nothing else: execution agents don't run (a ha
 
 Each case runs in its own process, because the app binds its data directory when it starts.
 
+Seven configurations are compared. In the code they are `v0` (the original), `v1` (the prompt rewritten), `v2d` (a lookup over a description of each agent), `v2` (a lookup over a work record, the one chosen), `v3` (required to ask), `v4` (code decides when to ask) and `v5` (a second model call decides). The report numbers them 0 to 6 in that order.
+
 ---
 
 ## 2. The worlds
 
-A generator builds each world from a seed. Nothing in the test set is written by a model: the facts and the wording both come from code.
+A generator builds each world from a seed. The right answer for each case comes from how the world was built, and the wording comes from templates in the generator, with no model call when the cases are generated. So the set is the same every time it is rebuilt.
 
 **What a world contains**
 

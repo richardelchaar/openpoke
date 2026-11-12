@@ -62,9 +62,12 @@ In the order the work was done. Items that were planned and dropped are marked, 
 - [x] The winner set as the default
 - [x] E7 held-out run
 - [x] A second iteration of the chosen version, on the dev world
+- [x] A lookup over a description only (V2d), on all cases at three sizes and the crowded roster
+- [x] The app run by hand with the new defaults
 - [x] Results tables built from the saved runs (`python -m evals.report`)
 - [x] Checks on every push
 - [x] Report (`08`)
+- [x] Report as a page (`report.html`)
 - [ ] Pull request
 
 ## Planned and not done

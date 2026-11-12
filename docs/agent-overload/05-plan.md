@@ -68,6 +68,7 @@ E1 to E4 and E7 call the model. E5 and E6 are code over saved results, so they c
 | | Added: a crowded test (ten namesakes), a stress set of 40 messier messages, and a comparison of plain keyword search with the full lookup. |
 | | Five grading rules were changed after reading failures, for every version. Each is in the journal, and the report lists them with their effect. |
 | | A second iteration of V2 (each candidate says how it was found), run on the dev world. A tie. |
+| | A seventh configuration, V2d: the lookup over a title and one line of description per agent, with no work record and no contacts. Added to test whether the work record is needed. |
 
 ---
 

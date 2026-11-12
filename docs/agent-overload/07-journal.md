@@ -331,3 +331,39 @@ Five met, three missed. The misses are needless questions, the turn after an ans
 **Result.** Wrong again. The needless questions did not move. The change is a tie overall, slightly better on the turn after an answer, and it missed a few questions it should have asked, which V2 never did.
 
 **Decision.** Off by default (`OPENPOKE_EXPLAIN_CANDIDATES`). V2 as measured on the held-out world stays the default. The cause of the needless questions is still open.
+
+---
+
+## A lookup over a description only (V2d) · added last
+
+| | |
+|---|---|
+| Question | The lookup stays either way, because it is what cuts the cost. Does each agent need a work record kept from its tool calls, and a contacts table, or is a title and one line of description enough? |
+| Expected | The description does about as well on finding the agent, and worse where people have to be told apart, most of all on the crowded roster. |
+| Setup | V2 with only a title and a description per agent ("missed payment (annual premium); with Pavel Pellegrino"): no people by address, no threads, no contacts. All 448 dev cases at three sizes and on the crowded roster, one run. `…-dev-v2d-main`, `…-dev-v2d-heavy` |
+
+| 20 / 160 / 640 / crowded | Description only | Work record (V2) |
+|---|---|---|
+| Right | 87 / 86 / 85 / 89% | 96 / 97 / 95 / 95% |
+| Asks when it should | 74 / 74 / 74 / 96% | 100 / 100 / 100 / 100% |
+| Asks when it shouldn't | 3 / 3 / 4 / 7% | 3 / 3 / 4 / 6% |
+| Duplicates | 3.0 / 2.5 / 3.9 / 4.1% | 1.2 / 0.7 / 1.2 / 0.5% |
+| Right without the contact category | 94 / 93 / 91% | 95 / 96 / 95% |
+
+**Result.** Partly as expected. Run without a model, the description's lookup finds the agents a case needs in about 100% of cases, the same as the record's. The scores differ in three places:
+
+- **A person with an agent, or a contact with none: 0% against 100%.** With no contacts table it never sees the second person.
+- **Shared contact: 31% against 100%.** The record shows the adjuster was copied on a client's claim, because the forward was recorded. A one-line description does not.
+- **Duplicates: two to three times as many,** and eight times as many on the crowded roster.
+
+It was not worse as the roster grew, which I had half expected: 87 / 86 / 85%.
+
+**Decision.** The work record and contacts stay. Most of what they buy is the contacts: without that category the gap is 1 to 4 points.
+
+**A caution.** The descriptions here are written by the test generator and always include the person's full name. One written in real use could be vaguer.
+
+---
+
+## The app, run by hand
+
+The eval stops at the orchestrator's decision, so I also ran the app itself with the new defaults and a temporary data directory, and sent it two messages. "Thanks, that is all for now" was answered directly, with no agent. "Email Dana Lee at dana.lee@example.com and ask for the lease renewal terms" created an agent with an id, a summary taken from its instructions, Dana on its record and in the contacts, and a hand-off entry in the conversation log. The execution agent ran, found no Gmail account connected, and reported that; the orchestrator passed it on with the draft it would have sent. No errors in the log.
