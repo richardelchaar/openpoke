@@ -615,7 +615,7 @@ a.cref:hover { text-decoration: underline; }
 
 <section id="gaps">
   <h2>7. Other Codebase Fixes</h2>
-  <p>While building the harness and inspecting live server runs, I fixed ten upstream reliability and cost issues on this branch and documented four larger architectural gaps for production hardening.</p>
+  <p>While building the harness and inspecting live server runs, I fixed eleven upstream issues on this branch, including code-enforced approval before any email is sent, and documented three larger gaps for production hardening.</p>
   <h3>Fixed on This Branch</h3>
   <div class="scroll"><table>
     <thead><tr><th>Upstream Issue</th><th>Fix</th></tr></thead>
@@ -629,7 +629,8 @@ a.cref:hover { text-decoration: underline; }
       <tr><td>No transient API retry logic</td><td>Retry with backoff (2 retries) on timeouts, 429s, and 5xx</td></tr>
       <tr><td>Hallucinated <code>reacttomessage</code> tool &amp; unfilled prompt placeholder</td><td>Cleaned both system prompts</td></tr>
       <tr><td>Truncated execution logs (200/500 chars) lost Gmail <code>thread_id</code>s</td><td>Inject participant emails and <code>thread_id</code>s from SQLite work record</td></tr>
-      <tr><td>Zero tests or CI</td><td>39 <code>pytest</code> unit tests, dataset validator, replay harness, GitHub Actions</td></tr>
+      <tr><td><code>gmail_reply_to_thread</code> and <code>gmail_forward_email</code> sent immediately; only a prompt line asked for confirmation</td><td>Every draft, reply and forward is held with an approval ID. It is sent only after the user approves it on their own turn, once its exact text has been shown, and each approval sends once (<code>server/services/approvals.py</code>). An agent's report or an email alert can never approve.</td></tr>
+      <tr><td>Zero tests or CI</td><td>51 <code>pytest</code> unit tests, dataset validator, replay harness, GitHub Actions</td></tr>
     </tbody>
   </table></div>
 
@@ -637,7 +638,6 @@ a.cref:hover { text-decoration: underline; }
   <div class="scroll"><table>
     <thead><tr><th>Production Gap</th><th>Recommended Fix</th></tr></thead>
     <tbody>
-      <tr><td><code>gmail_reply_to_thread</code> / <code>gmail_forward_email</code> send immediately without code-enforced approval</td><td>Create thread drafts first; require code-verified user approval tied to exact draft text</td></tr>
       <tr><td>Unbounded execution-agent log replay</td><td>Window to last <em>N</em> turns now that thread IDs and contacts live in SQLite</td></tr>
       <tr><td>Concurrent runs on the same agent (reminder + chat)</td><td>Per-<code>agent_id</code> async lock in <code>ExecutionBatchManager</code></td></tr>
       <tr><td>Unauthenticated API routes</td><td>Add auth middleware before non-local deployment</td></tr>
@@ -649,7 +649,7 @@ a.cref:hover { text-decoration: underline; }
   <h2>8. Limitations &amp; Grading Adjustments</h2>
   <ul>
     <li><strong>Cold-start contacts and static summaries in the live server:</strong> The benchmark preloads a user's address book and clean one-line agent summaries, whereas the live app currently populates <code>contacts</code> incrementally as execution agents touch emails and keeps each agent's initial creation instruction as its summary. Syncing Google Contacts via Composio on OAuth connect is required to detect unrostered namesakes on day one.</li>
-    <li><strong>Boundary-stubbed Gmail execution:</strong> Evaluation runs execute the real <code>InteractionAgentRuntime</code> and SQLite lookup layer end to end, stopping at the handoff tool boundary rather than calling live Gmail APIs. Live FastAPI smoke tests verified SQLite creation and dispatch up to Composio credentials.</li>
+    <li><strong>Boundary-stubbed Gmail execution:</strong> Evaluation runs execute the real <code>InteractionAgentRuntime</code> and SQLite lookup layer end to end, stopping at the handoff tool boundary rather than calling live Gmail APIs. Live FastAPI smoke tests verified SQLite creation and dispatch up to Composio credentials. Send approval is tested against a stand-in for Gmail: drafts, replies and forwards are held, and nothing is sent without the user's approval. A real send through Gmail was not run.</li>
     <li><strong>Exact whole-word name matching &amp; higher agent volume:</strong> <code>match_people()</code> misses nicknames (<em>"Wes"</em> → <code>Wesley</code>) and first-name typos, and scoping one agent per task creates more rows over time than contact-level reuse (though FTS5 shortlisting keeps per-turn token cost flat).</li>
     <li><strong>Synthetic template distribution &amp; single-model evaluation:</strong> Both benchmark worlds come from one deterministic generator, and all variants were evaluated on <code>anthropic/claude-haiku-5.5</code> (with three repeats on <code>v0</code> and a single pass per size on <code>v1</code>–<code>v5</code>).</li>
   </ul>
@@ -672,14 +672,13 @@ a.cref:hover { text-decoration: underline; }
     <li><strong>Sync Google Contacts via Composio</strong> and update agent summaries from latest thread subjects.</li>
     <li><strong>Run the LLM judge (<code>v5</code>) only on Turn-2 user answers</strong> (+5–10 pts where replies are terse, zero overhead on Turn 1).</li>
     <li><strong>Add nickname expansion, edit-distance matching, and recipient-vs-mention parsing</strong> in <code>match_people()</code>.</li>
-    <li><strong>Enforce draft-before-send approval in Python</strong> for replies and forwards.</li>
     <li><strong>Test smaller/older models</strong> and organic human-written email traffic.</li>
   </ol>
 </section>
 
 <section id="reproduce">
   <h2>10. Reproducibility</h2>
-<pre>python -m pytest tests -q                                          # 39 unit tests (no API calls)
+<pre>python -m pytest tests -q                                          # 51 unit tests (no API calls)
 python -m evals.worlds.generate &amp;&amp; python -m evals.worlds.heavy    # rebuild worlds from seeds
 shasum -a 256 -c evals/CHECKSUMS                                   # verify frozen dataset hashes
 python -m evals.cases.validate                                     # validate cases against worlds

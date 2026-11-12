@@ -74,7 +74,7 @@ All runs use `anthropic/claude-haiku-5.5` across all roles (448 development case
 ## Quick Verification Commands
 
 ```bash
-python -m pytest tests -q                                       # 39 unit tests, zero LLM calls
+python -m pytest tests -q                                       # 51 unit tests, zero LLM calls
 python -m evals.cases.validate                                  # validate every case against world state
 python -m evals.report dev                                      # print ablation tables from saved traces
 python -m evals.run --world dev --version v2 --sizes 20,160,640 # live run (requires OPENROUTER_API_KEY)

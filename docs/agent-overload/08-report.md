@@ -368,7 +368,7 @@ On the development set across 20, 160, and 640 agents, `v2b` tied `v2` (`96 / 97
 
 ## 7. Other Codebase Fixes
 
-While building the harness and inspecting live server runs, I fixed ten upstream reliability and cost issues on this branch and documented four larger architectural gaps for production hardening.
+While building the harness and inspecting live server runs, I fixed eleven upstream issues on this branch, including code-enforced approval before any email is sent, and documented three larger gaps for production hardening.
 
 ### Fixed on This Branch
 
@@ -383,13 +383,13 @@ While building the harness and inspecting live server runs, I fixed ten upstream
 | No transient API retry logic | Retry with backoff (2 retries) on timeouts, 429s, and 5xx |
 | Hallucinated `reacttomessage` tool & unfilled prompt placeholder | Cleaned both system prompts |
 | Truncated execution logs (200/500 chars) lost Gmail `thread_id`s | Inject participant emails and `thread_id`s from SQLite work record |
-| Zero tests or CI | 39 `pytest` unit tests, dataset validator, replay harness, GitHub Actions |
+| `gmail_reply_to_thread` and `gmail_forward_email` sent immediately; only a prompt line asked for confirmation | Every draft, reply and forward is held with an approval ID. It is sent only after the user approves it on their own turn, once its exact text has been shown, and each approval sends once (`server/services/approvals.py`). An agent's report or an email alert can never approve. |
+| Zero tests or CI | 51 `pytest` unit tests, dataset validator, replay harness, GitHub Actions |
 
 ### Flagged for Production
 
 | Production Gap | Recommended Fix |
 |---|---|
-| **`gmail_reply_to_thread` / `gmail_forward_email` send immediately** without code-enforced approval | Create thread drafts first; require code-verified user approval tied to exact draft text |
 | **Unbounded execution-agent log replay** | Window to last *N* turns now that thread IDs and contacts live in SQLite |
 | **Concurrent runs on the same agent** (reminder + chat) | Per-`agent_id` async lock in `ExecutionBatchManager` |
 | **Unauthenticated API routes** | Add auth middleware before non-local deployment |
@@ -399,7 +399,7 @@ While building the harness and inspecting live server runs, I fixed ten upstream
 ## 8. Limitations & Grading Adjustments
 
 - **Cold-start contacts and static summaries in the live server:** The benchmark preloads a user's address book and clean one-line agent summaries, whereas the live app currently populates `contacts` incrementally as execution agents touch emails and keeps each agent's initial creation instruction as its summary. Syncing Google Contacts via Composio on OAuth connect is required to detect unrostered namesakes on day one.
-- **Boundary-stubbed Gmail execution:** Evaluation runs execute the real `InteractionAgentRuntime` and SQLite lookup layer end to end, stopping at the handoff tool boundary rather than calling live Gmail APIs. Live FastAPI smoke tests verified SQLite creation and dispatch up to Composio credentials.
+- **Boundary-stubbed Gmail execution:** Evaluation runs execute the real `InteractionAgentRuntime` and SQLite lookup layer end to end, stopping at the handoff tool boundary rather than calling live Gmail APIs. Live FastAPI smoke tests verified SQLite creation and dispatch up to Composio credentials. Send approval is tested against a stand-in for Gmail: drafts, replies and forwards are held, and nothing is sent without the user's approval. A real send through Gmail was not run.
 - **Exact whole-word name matching & higher agent volume:** `match_people()` misses nicknames (*"Wes"* → `Wesley`) and first-name typos, and scoping one agent per task creates more rows over time than contact-level reuse (though FTS5 shortlisting keeps per-turn token cost flat).
 - **Synthetic template distribution & single-model evaluation:** Both benchmark worlds come from one deterministic generator, and all variants were evaluated on `anthropic/claude-haiku-5.5` (with three repeats on `v0` and a single pass per size on `v1`–`v5`).
 
@@ -422,15 +422,14 @@ Four grading rules were refined after inspecting failure traces where the initia
 2. **Sync Google Contacts via Composio** and update agent summaries from latest thread subjects.
 3. **Run the LLM judge (`v5`) only on Turn-2 user answers** (+5–10 pts where replies are terse, zero overhead on Turn 1).
 4. **Add nickname expansion, edit-distance matching, and recipient-vs-mention parsing** in `match_people()`.
-5. **Enforce draft-before-send approval in Python** for replies and forwards.
-6. **Test smaller/older models** and organic human-written email traffic.
+5. **Test smaller/older models** and organic human-written email traffic.
 
 ---
 
 ## 10. Reproducing Everything
 
 ```bash
-python -m pytest tests -q                                          # 39 unit tests (no API calls)
+python -m pytest tests -q                                          # 51 unit tests (no API calls)
 python -m evals.worlds.generate && python -m evals.worlds.heavy    # rebuild worlds from seeds
 shasum -a 256 -c evals/CHECKSUMS                                   # verify frozen dataset hashes
 python -m evals.cases.validate                                     # validate cases against worlds

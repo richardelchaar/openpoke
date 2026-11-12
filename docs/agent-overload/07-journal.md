@@ -367,3 +367,15 @@ It was not worse as the roster grew, which I had half expected: 87 / 86 / 85%.
 ## The app, run by hand
 
 The eval stops at the orchestrator's decision, so I also ran the app itself with the new defaults and a temporary data directory, and sent it two messages. "Thanks, that is all for now" was answered directly, with no agent. "Email Dana Lee at dana.lee@example.com and ask for the lease renewal terms" created an agent with an id, a summary taken from its instructions, Dana on its record and in the contacts, and a hand-off entry in the conversation log. The execution agent ran, found no Gmail account connected, and reported that; the orchestrator passed it on with the draft it would have sent. No errors in the log.
+
+---
+
+## Send approval in code · last
+
+**Why.** Reply and forward called Gmail directly and sent at once; only a line in the prompt asked the model to check with the user. For a broker this is the gap with the most consequence, and the brief asks for gaps to be solved in code.
+
+**What changed.** `server/services/approvals.py` holds every draft, reply and forward with an approval id. Nothing reaches Gmail's send actions except through `gmail_send_approved`, which needs an approval. The orchestrator approves with `approve_send`, which works only on a turn the user started (an agent's report or an email alert cannot approve), only after the email's exact text has been shown to the user, and only once per email. It is offered to the orchestrator only on the user's turn and only while an email is waiting.
+
+**Tested.** Twelve unit tests against a stand-in for Gmail: a reply, a forward and a draft are held with nothing sent; sending without approval is refused; approval is refused before the exact text is shown and on a turn the user did not start; an approved email is sent once and exactly as approved; changed text needs its own approval; a failed send can be retried. A real send through Gmail was not run.
+
+**Effect on the results.** None. The eval stops at the routing decision, and the approve tool is offered only while an email is waiting, which never happens in the eval. Saved eval cases replay with identical prompts.
